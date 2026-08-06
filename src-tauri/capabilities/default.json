@@ -1,0 +1,16 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicehash/tauri/dev/crates/tauri-config-schema/capabilities.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "core:window:default",
+    "core:event:default",
+    "core:app:default",
+    "dialog:allow-open",
+    "opener:default",
+    "opener:allow-reveal-item-in-dir"
+  ]
+}

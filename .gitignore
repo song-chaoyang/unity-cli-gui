@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Codely CLI (personal config — never commit)
+.codely-cli/
+CODELY.md
+mem-log/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Rust / Cargo
+**/*.rs.bk
+
+# Tauri
+src-tauri/WixTools/
+.codely/

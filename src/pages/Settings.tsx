@@ -1,0 +1,277 @@
+import { useEffect, useState } from "react";
+import { LogIn, LogOut, Globe, Server, BarChart3, HardDrive, RefreshCw, Download, Trash2, FileText, Stethoscope, Package, Info, Sun, Moon, Monitor, Key, FolderCog, Activity } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input, Select, Label } from "@/components/ui/input";
+import { useI18n } from "@/i18n";
+import { SUPPORTED_LANGS, type Lang } from "@/i18n/translations";
+import { useAppStore } from "@/stores/useAppStore";
+import { useToastStore } from "@/stores/useToastStore";
+import { useTheme } from "@/stores/useTheme";
+import * as tauri from "@/lib/tauri";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+
+export function Settings() {
+  const { t, lang, setLang } = useI18n();
+  const { theme, setTheme } = useTheme();
+  const { authInfo, setAuthInfo, envInfo, setEnvInfo, cacheInfo, setCacheInfo } = useAppStore();
+  const [proxyUrl, setProxyUrl] = useState("");
+  const [proxyBypass, setProxyBypass] = useState("");
+  const [analyticsOpt, setAnalyticsOpt] = useState<string | null>(null);
+  const [doctorOutput, setDoctorOutput] = useState<string | null>(null);
+  const [diagnoseOutput, setDiagnoseOutput] = useState<string | null>(null);
+  const [changelog, setChangelog] = useState<string | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
+  const [hubInfo, setHubInfo] = useState<{ installed: boolean; path: string } | null>(null);
+  const [licenseInfo, setLicenseInfo] = useState<any>(null);
+  const [licenses, setLicenses] = useState<any>(null);
+  const [installPath, setInstallPath] = useState<string>("");
+  const [showLicenseActivate, setShowLicenseActivate] = useState(false);
+  const [licenseSerial, setLicenseSerial] = useState("");
+  const [diagTab, setDiagTab] = useState<"doctor" | "diagnose">("doctor");
+  const showToast = useToastStore(s => s.addToast);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [auth, env, cache, proxy, analytics, update, hub, lic, lics, ip] = await Promise.allSettled([
+          tauri.authStatus(),
+          tauri.getEnv(),
+          tauri.cacheInfo(),
+          tauri.getProxy(),
+          tauri.analyticsStatus(),
+          tauri.checkCliUpdate(),
+          tauri.checkHubInstalled(),
+          tauri.licenseStatus(),
+          tauri.listLicenses(),
+          tauri.getInstallPath(),
+        ]);
+        if (auth.status === "fulfilled") {
+          const a = auth.value;
+          if (a?.loggedIn) {
+            setAuthInfo({ loggedIn: true, name: a.user?.name, email: a.user?.email });
+          }
+        } else {
+          try {
+            const retry = await tauri.authStatus();
+            if (retry?.loggedIn) {
+              setAuthInfo({ loggedIn: true, name: retry.user?.name, email: retry.user?.email });
+            }
+          } catch {}
+        }
+        if (env.status === "fulfilled") setEnvInfo(env.value);
+        if (cache.status === "fulfilled") setCacheInfo(cache.value);
+        if (proxy.status === "fulfilled") setProxyUrl(proxy.value?.url || "");
+        if (analytics.status === "fulfilled") setAnalyticsOpt(analytics.value?.optedIn ? "opted-in" : "opted-out");
+        if (update.status === "fulfilled") setUpdateInfo(update.value);
+        if (hub.status === "fulfilled") setHubInfo(hub.value);
+        if (lic.status === "fulfilled") setLicenseInfo(lic.value);
+        if (lics.status === "fulfilled") setLicenses(lics.value);
+        if (ip.status === "fulfilled" && ip.value) {
+          const path = typeof ip.value === "string" ? ip.value : ip.value?.data?.path || ip.value?.path || "";
+          setInstallPath(path);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
+  }, []);
+
+  const handleDoctor = async () => {
+    setLoading(true); setDiagTab("doctor");
+    try { const r = await tauri.runDoctor(); setDoctorOutput(r); } catch (e: any) { setDoctorOutput(`Error: ${e.message}`); } finally { setLoading(false); }
+  };
+  const handleDiagnose = async () => {
+    setLoading(true); setDiagTab("diagnose");
+    try { const r = await tauri.runDiagnose(); setDiagnoseOutput(r); } catch (e: any) { setDiagnoseOutput(`Error: ${e.message}`); } finally { setLoading(false); }
+  };
+  const handleChangelog = async () => {
+    setLoading(true);
+    try { const r = await tauri.getChangelog(); setChangelog(r); } catch (e: any) { setChangelog(`Error: ${e.message}`); } finally { setLoading(false); }
+  };
+  const handleLangChange = (newLang: Lang) => { setLang(newLang); tauri.setLanguage(newLang).catch(() => {}); };
+  const handleBrowseInstallPath = async () => {
+    try {
+      const selected = await openDialog({ directory: true, multiple: false, title: t("settings.editorPath") });
+      if (selected) { setInstallPath(selected as string); await tauri.setInstallPath(selected as string); }
+    } catch {}
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-lg font-semibold">{t("settings.title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("settings.desc")}</p>
+      </div>
+
+      {/* Authentication */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><LogIn className="h-4 w-4" /> {t("settings.auth")}</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div>
+            {authInfo?.loggedIn ? (<><p className="text-sm font-medium">{authInfo.name}</p><p className="text-xs text-muted-foreground">{authInfo.email}</p></>) : (<p className="text-sm text-muted-foreground">{t("dash.notLoggedIn")}</p>)}
+          </div>
+          <div className="flex gap-2">
+            {authInfo?.loggedIn ? (<Button variant="outline" size="sm" onClick={() => tauri.authLogout()}><LogOut className="mr-2 h-3.5 w-3.5" /> {t("settings.logout")}</Button>) : (<Button size="sm" onClick={() => tauri.authLogin()}><LogIn className="mr-2 h-3.5 w-3.5" /> {t("settings.login")}</Button>)}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* License Management */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Key className="h-4 w-4" /> {t("license.title")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div><span className="text-muted-foreground">{t("license.status")}:</span> {licenseInfo?.active ? <Badge variant="success">{t("license.active")}</Badge> : <Badge variant="secondary">{t("license.noLicense")}</Badge>}</div>
+            <div><span className="text-muted-foreground">{t("license.type")}:</span> {licenseInfo?.licenses?.[0]?.product || licenseInfo?.licenses?.[0]?.type || "—"}</div>
+            <div><span className="text-muted-foreground">{t("license.expiry")}:</span> {licenseInfo?.licenses?.[0]?.expires || "—"}</div>
+            <div><span className="text-muted-foreground">{t("settings.auth")}:</span> {licenseInfo?.authMode || "—"}</div>
+          </div>
+          {showLicenseActivate && (
+            <div className="space-y-2 rounded-md border border-border p-3">
+              <div><Label>{t("license.serial")}</Label><Input value={licenseSerial} onChange={e => setLicenseSerial(e.target.value)} placeholder={t("license.serialPlaceholder")} className="mt-1" /></div>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={async () => { try { await tauri.licenseActivate({ personal: true, acceptEula: true }); setShowLicenseActivate(false); setLicenseSerial(""); showToast("success", t("license.active")); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.activatePersonal")}</Button>
+                <Button size="sm" disabled={!licenseSerial} onClick={async () => { try { await tauri.licenseActivate({ serial: licenseSerial, acceptEula: true }); setShowLicenseActivate(false); setLicenseSerial(""); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.activateSerial")}</Button>
+                <Button size="sm" variant="outline" onClick={() => setShowLicenseActivate(false)}>{t("common.cancel")}</Button>
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2">
+            {!showLicenseActivate && <Button variant="outline" size="sm" onClick={() => setShowLicenseActivate(true)}><Key className="mr-2 h-3.5 w-3.5" /> {t("license.activate")}</Button>}
+            <Button variant="outline" size="sm" onClick={async () => { try { await tauri.licenseReturn(); showToast("success", t("license.return")); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.return")}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Theme */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Sun className="h-4 w-4" /> {t("theme.title")}</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            <Button variant={theme === "dark" ? "default" : "outline"} size="sm" onClick={() => setTheme("dark")}><Moon className="mr-2 h-3.5 w-3.5" /> {t("theme.dark")}</Button>
+            <Button variant={theme === "light" ? "default" : "outline"} size="sm" onClick={() => setTheme("light")}><Sun className="mr-2 h-3.5 w-3.5" /> {t("theme.light")}</Button>
+            <Button variant={theme === "system" ? "default" : "outline"} size="sm" onClick={() => setTheme("system")}><Monitor className="mr-2 h-3.5 w-3.5" /> {t("theme.system")}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Language */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-4 w-4" /> {t("settings.language")}</CardTitle></CardHeader>
+        <CardContent><Select value={lang} onChange={e => handleLangChange(e.target.value as Lang)} className="w-48">{SUPPORTED_LANGS.map(l => <option key={l.code} value={l.code}>{l.nativeName}</option>)}</Select></CardContent>
+      </Card>
+
+      {/* Editor Install Path */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><FolderCog className="h-4 w-4" /> {t("settings.editorPath")}</CardTitle></CardHeader>
+        <CardContent>
+          <div className="flex gap-1">
+            <Input value={installPath} onChange={e => setInstallPath(e.target.value)} className="flex-1" />
+            <Button variant="outline" size="icon" onClick={handleBrowseInstallPath}><FolderCog className="h-4 w-4" /></Button>
+            <Button size="sm" onClick={() => tauri.setInstallPath(installPath)}>{t("common.save")}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Environment info */}
+      {envInfo && (
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2"><Server className="h-4 w-4" /> {t("settings.env")}</CardTitle></CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div><span className="text-muted-foreground">{t("settings.hubVersion")}:</span> {envInfo.hubVersion}</div>
+              <div><span className="text-muted-foreground">{t("settings.editorPath")}:</span> <code className="text-xs">{envInfo.editorInstallPath}</code></div>
+              <div><span className="text-muted-foreground">{t("settings.userData")}:</span> <code className="text-xs">{envInfo.userDataPath}</code></div>
+              <div><span className="text-muted-foreground">{t("settings.cachePath")}:</span> <code className="text-xs">{envInfo.downloadCachePath}</code></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Proxy */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Globe className="h-4 w-4" /> {t("settings.proxy")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-2 gap-4">
+            <div><Label>{t("settings.proxyUrl")}</Label><Input value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="http://user:pass@host:8080" className="mt-1" /></div>
+            <div><Label>{t("settings.bypass")}</Label><Input value={proxyBypass} onChange={e => setProxyBypass(e.target.value)} placeholder="localhost,127.0.0.1" className="mt-1" /></div>
+          </div>
+          <div className="flex gap-2"><Button size="sm" onClick={() => tauri.setProxy(proxyUrl, proxyBypass || undefined)}>{t("common.save")}</Button><Button size="sm" variant="outline" onClick={() => tauri.unsetProxy()}>{t("common.clear")}</Button></div>
+        </CardContent>
+      </Card>
+
+      {/* Analytics */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" /> {t("settings.analytics")}</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">{t("settings.status")}: <Badge variant={analyticsOpt === "opted-in" ? "success" : "secondary"}>{analyticsOpt || "—"}</Badge></p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptIn(); setAnalyticsOpt("opted-in"); }}>{t("settings.optIn")}</Button>
+            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptOut(); setAnalyticsOpt("opted-out"); }}>{t("settings.optOut")}</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Cache management */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><HardDrive className="h-4 w-4" /> {t("settings.cacheMgmt")}</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div>{cacheInfo ? (<><p className="text-sm font-medium">{cacheInfo.size} ({cacheInfo.fileCount} files)</p><p className="text-xs text-muted-foreground">{cacheInfo.path}</p></>) : <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}</div>
+          <Button variant="outline" size="sm" onClick={() => tauri.cacheClean().then(() => tauri.cacheInfo().then(setCacheInfo))}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.cleanCache")}</Button>
+        </CardContent>
+      </Card>
+
+      {/* CLI management */}
+      <Card>
+        <CardHeader><CardTitle>{t("settings.cliMgmt")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2"><Badge variant={updateInfo?.updateAvailable ? "warning" : "success"}>v1.0.0-beta.3</Badge>{updateInfo?.updateAvailable && <span className="text-xs text-yellow-400">{t("settings.updateAvailable")}</span>}</div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleChangelog}><FileText className="mr-2 h-3.5 w-3.5" /> {t("settings.changelog")}</Button>
+              <Button variant="outline" size="sm" onClick={() => tauri.checkCliUpdate().then(setUpdateInfo)}><RefreshCw className="mr-2 h-3.5 w-3.5" /> {t("settings.checkUpdate")}</Button>
+              <Button size="sm" onClick={() => tauri.startCliUpgrade(true)}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.upgradeCli")}</Button>
+            </div>
+          </div>
+          {changelog && (<div className="max-h-60 overflow-auto rounded-md border border-border p-3"><pre className="whitespace-pre-wrap text-xs text-muted-foreground">{changelog}</pre></div>)}
+        </CardContent>
+      </Card>
+
+      {/* Unity Hub management */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Unity Hub</CardTitle></CardHeader>
+        <CardContent className="flex items-center justify-between">
+          <div>{hubInfo === null ? (<p className="text-sm text-muted-foreground">{t("common.loading")}</p>) : hubInfo.installed ? (<><p className="text-sm font-medium flex items-center gap-2"><Badge variant="success">✓ {t("settings.hubInstalled")}</Badge></p>{hubInfo.path && <p className="text-xs text-muted-foreground mt-1">{hubInfo.path}</p>}<p className="text-xs text-muted-foreground mt-1">{t("settings.uninstallHubDesc")}</p></>) : (<><p className="text-sm font-medium flex items-center gap-2"><Badge variant="secondary">{t("settings.hubNotInstalled")}</Badge></p><p className="text-xs text-muted-foreground mt-1">{t("settings.installHubDesc")}</p></>)}</div>
+          <div className="flex gap-2">{hubInfo?.installed ? (<Button variant="outline" size="sm" onClick={() => { if (confirm(t("settings.uninstallHubDesc"))) alert("Please uninstall Unity Hub manually from your system's application manager."); }}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.uninstallHub")}</Button>) : (<Button size="sm" onClick={() => tauri.installHub()}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.installHub")}</Button>)}</div>
+        </CardContent>
+      </Card>
+
+      {/* Diagnostics */}
+      <Card>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Stethoscope className="h-4 w-4" /> {t("settings.diagnostics")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <Button variant={diagTab === "doctor" ? "default" : "outline"} size="sm" onClick={handleDoctor} disabled={loading}><Activity className="mr-2 h-3.5 w-3.5" /> {t("settings.runDoctor")}</Button>
+            <Button variant={diagTab === "diagnose" ? "default" : "outline"} size="sm" onClick={handleDiagnose} disabled={loading}><Stethoscope className="mr-2 h-3.5 w-3.5" /> Diagnose</Button>
+          </div>
+          {diagTab === "doctor" && doctorOutput && (<div className="max-h-96 overflow-auto rounded-md border border-border p-3"><pre className="whitespace-pre-wrap font-mono text-xs text-muted-foreground">{doctorOutput}</pre></div>)}
+          {diagTab === "diagnose" && diagnoseOutput && (<div className="max-h-96 overflow-auto rounded-md border border-border p-3"><pre className="whitespace-pre-wrap font-mono text-xs text-muted-foreground">{diagnoseOutput}</pre></div>)}
+        </CardContent>
+      </Card>
+
+      {/* Danger zone */}
+      <Card className="border-destructive/50">
+        <CardHeader><CardTitle className="text-destructive">{t("settings.dangerZone")}</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div><p className="text-sm font-medium text-destructive">{t("settings.uninstallCli")}</p><p className="text-xs text-muted-foreground">{t("settings.uninstallCliDesc")}</p></div>
+            <Button variant="destructive" size="sm" onClick={() => { if (confirm(t("settings.uninstallCliDesc"))) tauri.selfUninstall(false); }}>{t("settings.uninstallCli")}</Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
