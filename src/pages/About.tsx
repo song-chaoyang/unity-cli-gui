@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Info, Github, ExternalLink, RefreshCw, Package, Bug } from "lucide-react";
+import { Info, RefreshCw, Package, Bug } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { useI18n } from "@/i18n";
 import { useToastStore } from "@/stores/useToastStore";
 import * as tauri from "@/lib/tauri";
@@ -10,6 +11,10 @@ import * as tauri from "@/lib/tauri";
 export function About() {
   const { t } = useI18n();
   const showToast = useToastStore(s => s.addToast);
+  const [showBugForm, setShowBugForm] = useState(false);
+  const [bugTitle, setBugTitle] = useState("");
+  const [bugDesc, setBugDesc] = useState("");
+  const [submittingBug, setSubmittingBug] = useState(false);
   const [cliVersion, setCliVersion] = useState("—");
   const [envInfo, setEnvInfo] = useState<any>(null);
   const [updateInfo, setUpdateInfo] = useState<any>(null);
@@ -34,19 +39,13 @@ export function About() {
     setChecking(false);
   };
 
-  const handleOpenRepo = () => {
-    window.open("https://github.com/song-chaoyang/unity-cli-gui", "_blank");
-  };
-
   const techStack = [
-    { name: "Tauri", version: "2.x", desc: "Cross-platform desktop framework" },
     { name: "React", version: "18.x", desc: "UI framework" },
     { name: "TypeScript", version: "5.x", desc: "Type-safe JavaScript" },
-    { name: "Rust", version: "stable", desc: "Backend language" },
     { name: "Tailwind CSS", version: "3.x", desc: "Utility-first CSS" },
     { name: "Zustand", version: "4.x", desc: "State management" },
     { name: "Vite", version: "5.x", desc: "Build tool" },
-    { name: "reqwest", version: "0.12", desc: "HTTP client (Rust)" },
+    { name: "lucide-react", version: "—", desc: "Icon library" },
   ];
 
   return (
@@ -68,7 +67,7 @@ export function About() {
           <div>
             <CardTitle className="text-xl">Unity CLI GUI</CardTitle>
             <div className="mt-1 flex items-center gap-2">
-              <Badge variant="outline">v0.3.0</Badge>
+              <Badge variant="outline">v0.0.1</Badge>
               <span className="text-xs text-muted-foreground">{t("about.unityCliVersion")}: {cliVersion}</span>
             </div>
           </div>
@@ -89,11 +88,7 @@ export function About() {
               <RefreshCw className={`mr-2 h-3.5 w-3.5 ${checking ? "animate-spin" : ""}`} />
               {t("about.checkUpdate")}
             </Button>
-            <Button variant="outline" size="sm" onClick={handleOpenRepo}>
-              <Github className="mr-2 h-3.5 w-3.5" />
-              {t("about.openRepo")}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => { const title = prompt(t("about.bugTitle")); if (title && title.length >= 3) { const desc = prompt(t("about.bugDesc")); if (desc && desc.length >= 10) { tauri.submitBug({ title, description: desc }).then(() => showToast("success", t("about.bugSubmitted"))).catch((e: any) => showToast("error", e.message)); } } }}>
+            <Button variant="outline" size="sm" onClick={() => setShowBugForm(!showBugForm)}>
               <Bug className="mr-2 h-3.5 w-3.5" />
               {t("about.reportBug")}
             </Button>
@@ -149,6 +144,44 @@ export function About() {
               <div><span className="text-muted-foreground">{t("settings.editorPath")}:</span> <code className="text-xs">{envInfo.editorInstallPath}</code></div>
               <div><span className="text-muted-foreground">{t("settings.cachePath")}:</span> <code className="text-xs">{envInfo.downloadCachePath}</code></div>
               <div><span className="text-muted-foreground">Platform:</span> {navigator.platform}</div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {/* Bug report form */}
+      {showBugForm && (
+        <Card className="border-primary/50">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2"><Bug className="h-4 w-4" /> {t("about.reportBug")}</span>
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowBugForm(false)}>✕</Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <Label>{t("about.bugTitle")}</Label>
+              <Input value={bugTitle} onChange={e => setBugTitle(e.target.value)} placeholder={t("about.bugTitle")} className="mt-1" />
+            </div>
+            <div>
+              <Label>{t("about.bugDesc")}</Label>
+              <Textarea value={bugDesc} onChange={e => setBugDesc(e.target.value)} placeholder={t("about.bugDesc")} className="mt-1 min-h-[80px]" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowBugForm(false)}>{t("common.cancel")}</Button>
+              <Button disabled={bugTitle.length < 3 || bugDesc.length < 10 || submittingBug} onClick={async () => {
+                setSubmittingBug(true);
+                try {
+                  await tauri.submitBug({ title: bugTitle, description: bugDesc });
+                  showToast("success", t("about.bugSubmitted"));
+                  setShowBugForm(false);
+                  setBugTitle("");
+                  setBugDesc("");
+                } catch (e: any) {
+                  showToast("error", e.message);
+                } finally {
+                  setSubmittingBug(false);
+                }
+              }}>{submittingBug ? "..." : t("common.save")}</Button>
             </div>
           </CardContent>
         </Card>

@@ -5,6 +5,7 @@ import {
   Circle, ChevronDown, User, LogOut, LogIn, Package,
 } from "lucide-react";
 import { useAppStore } from "@/stores/useAppStore";
+import { useToastStore } from "@/stores/useToastStore";
 import { useI18n } from "@/i18n";
 import { useTheme } from "@/stores/useTheme";
 import * as tauri from "@/lib/tauri";
@@ -43,13 +44,14 @@ const PAGES: Record<string, React.ComponentType> = {
 function App() {
   const {
     currentPage, setPage,
-    unityAvailable, setUnityAvailable,
+    unityAvailable, setUnityAvailable, unityPath,
     editors, projects, editorStatuses,
     authInfo, setAuthInfo,
   } = useAppStore();
 
   const { t, initFromCLI } = useI18n();
   const { initTheme } = useTheme();
+  const showToast = useToastStore(s => s.addToast);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -131,7 +133,7 @@ function App() {
   const handleLogin = async () => {
     setShowUserMenu(false);
     try {
-      // auth_login blocks until browser OAuth completes, then returns auth status
+      // authLogin launches browser + polls auth status until login completes or times out
       const status = await tauri.authLogin();
       if (status) {
         const s = status as any;
@@ -143,22 +145,7 @@ function App() {
       }
     } catch (e: any) {
       console.error("Login failed:", e);
-      // Fallback: try polling in case the blocking call was interrupted
-      let attempts = 0;
-      const poll = setInterval(async () => {
-        try {
-          const status = await tauri.authStatus();
-          if (status?.loggedIn) {
-            setAuthInfo({
-              loggedIn: true,
-              name: status.user?.name,
-              email: status.user?.email,
-            });
-            clearInterval(poll);
-          }
-        } catch {}
-        if (attempts > 60) clearInterval(poll);
-      }, 2000);
+      showToast("error", e.message || "Login failed");
     }
   };
 
@@ -187,8 +174,23 @@ function App() {
           <span className="text-xs text-muted-foreground">v0.0.1</span>
         </div>
         <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          {!unityAvailable && (
-            <span className="text-destructive">⚠ Unity CLI not found</span>
+          {unityAvailable ? (
+            <button
+              onClick={() => setPage("settings")}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-accent"
+              title={unityPath || ""}
+            >
+              <Circle className="h-2 w-2 fill-green-400 text-green-400" />
+              <span className="text-green-400">CLI ✓</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setPage("settings")}
+              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Download className="h-3 w-3" />
+              <span>{t("settings.installCli")}</span>
+            </button>
           )}
           {/* User menu with interaction */}
           <div ref={userMenuRef} className="relative">

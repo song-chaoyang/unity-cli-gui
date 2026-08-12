@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { LogIn, LogOut, Globe, Server, BarChart3, HardDrive, RefreshCw, Download, Trash2, FileText, Stethoscope, Package, Info, Sun, Moon, Monitor, Key, FolderCog, Activity } from "lucide-react";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { LogIn, LogOut, Globe, Server, BarChart3, HardDrive, RefreshCw, Download, Trash2, FileText, Stethoscope, Package, Info, Sun, Moon, Monitor, Key, FolderCog, Activity, Terminal as TerminalIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +16,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 export function Settings() {
   const { t, lang, setLang } = useI18n();
   const { theme, setTheme } = useTheme();
-  const { authInfo, setAuthInfo, envInfo, setEnvInfo, cacheInfo, setCacheInfo } = useAppStore();
+  const { authInfo, setAuthInfo, envInfo, setEnvInfo, cacheInfo, setCacheInfo, unityAvailable, unityPath, recheckUnityAvailable } = useAppStore();
   const [proxyUrl, setProxyUrl] = useState("");
   const [proxyBypass, setProxyBypass] = useState("");
   const [analyticsOpt, setAnalyticsOpt] = useState<string | null>(null);
@@ -31,6 +32,8 @@ export function Settings() {
   const [showLicenseActivate, setShowLicenseActivate] = useState(false);
   const [licenseSerial, setLicenseSerial] = useState("");
   const [diagTab, setDiagTab] = useState<"doctor" | "diagnose">("doctor");
+  const [cliLog, setCliLog] = useState<string[]>([]);
+  const [cliBusy, setCliBusy] = useState(false);
   const showToast = useToastStore(s => s.addToast);
 
   useEffect(() => {
@@ -77,6 +80,38 @@ export function Settings() {
         console.error(e);
       }
     })();
+  }, []);
+
+  // Listen for CLI install/uninstall streaming events
+  useEffect(() => {
+    const unlistens: UnlistenFn[] = [];
+    const prefixes = ["cli-install", "cli-uninstall"];
+    prefixes.forEach(prefix => {
+      listen<{ line: string }>(`${prefix}-stdout`, (e) => setCliLog(prev => [...prev, e.payload.line])).then(fn => unlistens.push(fn));
+      listen<{ line: string }>(`${prefix}-stderr`, (e) => setCliLog(prev => [...prev, e.payload.line])).then(fn => unlistens.push(fn));
+      listen<{ code: number; success: boolean }>(`${prefix}-exit`, (e) => {
+        setCliBusy(false);
+        const ok = e.payload.success;
+        setCliLog(prev => [...prev, `[${prefix}] exit code ${e.payload.code} ${ok ? "✓" : "✗"}`]);
+        if (!ok) { showToast("error", t("common.error")); return; }
+        if (prefix === "cli-install") {
+          // Retry detection with delays — newly installed binary may not be on PATH yet
+          [1000, 3000, 5000].forEach((delay, i) => {
+            setTimeout(async () => {
+              await recheckUnityAvailable();
+              if (useAppStore.getState().unityAvailable) {
+                showToast("success", t("settings.cliInstalled"));
+              } else if (i === 2) {
+                showToast("info", t("settings.restartNeeded"));
+              }
+            }, delay);
+          });
+        } else {
+          recheckUnityAvailable().then(() => showToast("success", t("settings.cliUninstalled")));
+        }
+      }).then(fn => unlistens.push(fn));
+    });
+    return () => { unlistens.forEach(fn => fn()); };
   }, []);
 
   const handleDoctor = async () => {
@@ -262,16 +297,72 @@ export function Settings() {
         </CardContent>
       </Card>
 
-      {/* Danger zone */}
+      {/* Unity CLI management — prominent install path + conditional install/uninstall */}
+      <Card className={unityAvailable ? "" : "border-primary/50"}>
+        <CardHeader><CardTitle className="flex items-center gap-2"><TerminalIcon className="h-4 w-4" /> Unity CLI</CardTitle></CardHeader>
+        <CardContent className="space-y-3">
+          {/* Status + path */}
+          <div className="flex items-center justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Badge variant={unityAvailable ? "success" : "destructive"}>
+                  {unityAvailable ? "✓ " + t("settings.cliInstalled") : "✗ " + t("settings.cliNotFound")}
+                </Badge>
+              </div>
+              {unityAvailable && unityPath && (
+                <p className="mt-1 text-xs text-muted-foreground font-mono break-all">{unityPath}</p>
+              )}
+              {!unityAvailable && (
+                <p className="mt-1 text-xs text-muted-foreground">{t("settings.installCliDesc")}</p>
+              )}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              {unityAvailable ? (
+                <Button variant="destructive" size="sm" disabled={cliBusy} onClick={async () => {
+                  if (!confirm(t("settings.uninstallCliDesc"))) return;
+                  setCliBusy(true); setCliLog([]);
+                  try { await tauri.startCliUninstall(false); } catch (e: any) { setCliBusy(false); showToast("error", e.message); }
+                }}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.uninstallCli")}</Button>
+              ) : (
+                <Button size="sm" disabled={cliBusy} onClick={async () => {
+                  setCliBusy(true); setCliLog([]);
+                  try { await tauri.installUnityCli(); } catch (e: any) { setCliBusy(false); showToast("error", e.message); }
+                }}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.installCli")}</Button>
+              )}
+            </div>
+          </div>
+          {/* Manual install commands (shown when CLI not installed) */}
+          {!unityAvailable && (
+            <div className="rounded-md border border-border bg-muted/30 p-2">
+              <p className="mb-1 text-xs text-muted-foreground">{t("settings.manualInstall")}:</p>
+              <pre className="whitespace-pre-wrap break-all text-xs font-mono text-muted-foreground">{navigator.platform.includes("Win") ? "$env:UNITY_CLI_CHANNEL='beta'; irm https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.ps1 | iex" : "curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh | UNITY_CLI_CHANNEL=beta bash"}</pre>
+            </div>
+          )}
+          {/* Streaming log output */}
+          {cliLog.length > 0 && (
+            <div className="max-h-48 overflow-auto rounded-md border border-border bg-black/40 p-2">
+              <pre className="whitespace-pre-wrap font-mono text-xs text-muted-foreground">{cliLog.join("\n")}</pre>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Danger zone — only shown when Unity CLI is installed */}
+      {unityAvailable && (
       <Card className="border-destructive/50">
         <CardHeader><CardTitle className="text-destructive">{t("settings.dangerZone")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <div><p className="text-sm font-medium text-destructive">{t("settings.uninstallCli")}</p><p className="text-xs text-muted-foreground">{t("settings.uninstallCliDesc")}</p></div>
-            <Button variant="destructive" size="sm" onClick={() => { if (confirm(t("settings.uninstallCliDesc"))) tauri.selfUninstall(false); }}>{t("settings.uninstallCli")}</Button>
+            <Button variant="destructive" size="sm" disabled={cliBusy} onClick={async () => {
+              if (!confirm(t("settings.uninstallCliDesc"))) return;
+              setCliBusy(true); setCliLog([]);
+              try { await tauri.startCliUninstall(false); } catch (e: any) { setCliBusy(false); showToast("error", e.message); }
+            }}>{t("settings.uninstallCli")}</Button>
           </div>
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

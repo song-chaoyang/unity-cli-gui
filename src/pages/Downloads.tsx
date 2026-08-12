@@ -16,7 +16,7 @@ export function Downloads() {
 
   useEffect(() => {
     const setup = async () => {
-      const prefixes = ["install", "build", "test", "upgrade"];
+      const prefixes = ["install", "build", "test", "upgrade", "cli-install", "cli-uninstall"];
       for (const prefix of prefixes) {
         const exitUn = await listen<{ code: number; success: boolean; cancelled?: boolean; command: string }>(
           `${prefix}-exit`,

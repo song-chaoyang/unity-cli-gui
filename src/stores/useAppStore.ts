@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Editor, Project, EditorStatus, CacheInfo, EnvInfo } from "@/lib/tauri";
+import * as tauri from "@/lib/tauri";
 
 interface AppState {
   // Navigation
@@ -10,6 +11,7 @@ interface AppState {
   unityAvailable: boolean;
   unityPath: string | null;
   setUnityAvailable: (available: boolean, path: string | null) => void;
+  recheckUnityAvailable: () => Promise<void>;
 
   // Editors
   editors: Editor[];
@@ -51,6 +53,15 @@ export const useAppStore = create<AppState>((set) => ({
   unityAvailable: false,
   unityPath: null,
   setUnityAvailable: (available, path) => set({ unityAvailable: available, unityPath: path }),
+  recheckUnityAvailable: async () => {
+    try {
+      const available = await tauri.checkUnityAvailable();
+      const path = available ? await tauri.getUnityPath() : null;
+      set({ unityAvailable: available, unityPath: path });
+    } catch {
+      set({ unityAvailable: false, unityPath: null });
+    }
+  },
 
   editors: [],
   editorsLoading: false,

@@ -160,7 +160,7 @@ export function Projects() {
         <div className="relative"><Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" /><Input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder={t("search.placeholder")} className="h-8 w-48 pl-8" /></div>
         <Button variant="outline" size="sm" onClick={loadData} disabled={loading}><RefreshCw className="mr-2 h-3.5 w-3.5" /> {t("common.refresh")}</Button>
         <Button variant="outline" size="sm" onClick={handleAddExisting}><FolderPlus className="mr-2 h-3.5 w-3.5" /> {t("projects.addExisting")}</Button>
-        <Button variant="outline" size="sm" onClick={async () => {
+        <Button variant="outline" size="sm" title={t("projects.exportHelp")} onClick={async () => {
           try {
             const filePath = await openDialog({ save: true, title: t("projects.export"), filters: [{ name: "JSON", extensions: ["json"] }] });
             if (filePath) {
@@ -169,7 +169,7 @@ export function Projects() {
             }
           } catch (e: any) { showToast("error", e.message); }
         }}><Download className="mr-2 h-3.5 w-3.5" /> {t("projects.export")}</Button>
-        <Button variant="outline" size="sm" onClick={async () => {
+        <Button variant="outline" size="sm" title={t("projects.importHelp")} onClick={async () => {
           try {
             const filePath = await openDialog({ title: t("projects.import"), filters: [{ name: "JSON", extensions: ["json"] }] });
             if (filePath) {

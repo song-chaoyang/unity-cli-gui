@@ -24,31 +24,14 @@ pub struct ProcessHandle {
     pub command: String,
 }
 
-/// Start a long-running `unity` command and stream stdout/stderr lines as Tauri events.
-/// `event_prefix` determines the event names: `<event_prefix>-stdout`, `<event_prefix>-stderr`,
-/// `<event_prefix>-exit`.
-pub async fn start_streaming(
+/// Common: register a spawned child in the cancel map and stream its stdout/stderr/exit
+/// as `<prefix>-stdout`, `<prefix>-stderr`, `<prefix>-exit` events.
+async fn spawn_and_stream(
     app: &AppHandle,
     event_prefix: &str,
-    args: &[&str],
-    include_json_flags: bool,
+    mut child: tokio::process::Child,
+    cmd_str: String,
 ) -> AppResult<ProcessHandle> {
-    let binary = super::cli_executor::require_unity()?;
-
-    let mut cmd_args = Vec::new();
-    if include_json_flags {
-        cmd_args.push("--json");
-        cmd_args.push("--no-banner");
-    }
-    cmd_args.extend_from_slice(args);
-
-    let mut child = Command::new(&binary)
-        .args(&cmd_args)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| AppError::io(&format!("Failed to spawn unity: {}", e)))?;
-
     let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
     let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
     {
@@ -92,8 +75,8 @@ pub async fn start_streaming(
     // Wait for exit or cancellation
     let app_clone = app.clone();
     let prefix = event_prefix.to_string();
-    let cmd_str = super::cli_executor::build_command_string(args, include_json_flags);
     let id_for_cleanup = id;
+    let cmd_str_for_closure = cmd_str.clone();
     tokio::spawn(async move {
         tokio::select! {
             status = child.wait() => {
@@ -103,13 +86,13 @@ pub async fn start_streaming(
                 };
                 let _ = app_clone.emit(
                     &format!("{}-exit", prefix),
-                    serde_json::json!({ "code": code, "success": success, "command": cmd_str }),
+                    serde_json::json!({ "code": code, "success": success, "command": cmd_str_for_closure }),
                 );
             }
             _ = cancel_rx => {
                 let _ = app_clone.emit(
                     &format!("{}-exit", prefix),
-                    serde_json::json!({ "code": -2, "success": false, "command": cmd_str, "cancelled": true }),
+                    serde_json::json!({ "code": -2, "success": false, "command": cmd_str_for_closure, "cancelled": true }),
                 );
             }
         }
@@ -117,10 +100,63 @@ pub async fn start_streaming(
         map.remove(&id_for_cleanup);
     });
 
-    Ok(ProcessHandle {
-        id,
-        command: super::cli_executor::build_command_string(args, include_json_flags),
-    })
+    Ok(ProcessHandle { id, command: cmd_str })
+}
+
+/// Start a long-running `unity` command and stream stdout/stderr lines as Tauri events.
+/// `event_prefix` determines the event names: `<event_prefix>-stdout`, `<event_prefix>-stderr`,
+/// `<event_prefix>-exit`.
+pub async fn start_streaming(
+    app: &AppHandle,
+    event_prefix: &str,
+    args: &[&str],
+    include_json_flags: bool,
+) -> AppResult<ProcessHandle> {
+    let binary = super::cli_executor::require_unity()?;
+
+    let mut cmd_args = Vec::new();
+    if include_json_flags {
+        cmd_args.push("--json");
+        cmd_args.push("--no-banner");
+    }
+    cmd_args.extend_from_slice(args);
+
+    let child = Command::new(&binary)
+        .args(&cmd_args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| AppError::io(&format!("Failed to spawn unity: {}", e)))?;
+
+    let cmd_str = super::cli_executor::build_command_string(args, include_json_flags);
+    spawn_and_stream(app, event_prefix, child, cmd_str).await
+}
+
+/// Start an arbitrary shell command and stream stdout/stderr lines as Tauri events.
+/// Does NOT require the unity binary — used for installing the CLI itself.
+/// On macOS/Linux: `/bin/sh -c "<shell_cmd>"`; on Windows: `powershell -NoProfile -Command "<shell_cmd>"`.
+pub async fn start_raw_stream(
+    app: &AppHandle,
+    event_prefix: &str,
+    shell_cmd: &str,
+) -> AppResult<ProcessHandle> {
+    let mut command = if cfg!(target_os = "windows") {
+        let mut c = Command::new("powershell");
+        c.args(["-NoProfile", "-NonInteractive", "-Command", shell_cmd]);
+        c
+    } else {
+        let mut c = Command::new("/bin/sh");
+        c.args(["-c", shell_cmd]);
+        c
+    };
+
+    let child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| AppError::io(&format!("Failed to spawn shell command: {}", e)))?;
+
+    spawn_and_stream(app, event_prefix, child, shell_cmd.to_string()).await
 }
 
 /// Cancel a running streaming process by ID.

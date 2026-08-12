@@ -15,12 +15,13 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noFallthroughCasesInSwitch": true,
-    "baseUrl": ".",
+    "baseUrl": "..",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["src/*"],
+      "@tauri-apps/api/core": ["src/shims/core.ts"],
+      "@tauri-apps/api/event": ["src/shims/event.ts"],
+      "@tauri-apps/plugin-dialog": ["src/shims/dialog.ts"]
     }
   },
-  "include": ["src"],
-  "exclude": ["src/shims"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["../src"]
 }

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:utools": "vite --config utools/vite.config.ts",
     "build": "tsc && vite build",
+    "build:utools": "tsc -p utools/tsconfig.json && vite build --config utools/vite.config.ts",
     "preview": "vite preview",
     "tauri": "tauri"
   },
