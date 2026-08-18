@@ -189,7 +189,7 @@ export const setDefaultEditor = (version: string) => runUnityJson(["editors", "d
 export const unsetDefaultEditor = () => runUnityJson(["editors", "default", "--unset"]);
 export const getDefaultEditor = () => runUnityJson(["editors", "default"]);
 export const uninstallEditor = (version: string) => runUnityJson(["uninstall", version, "--yes"]);
-export const listModules = (version: string) => runUnityJson(["modules", "list", version]);
+export const listModules = (version: string) => runUnityJson(["editors", "module", "list", version]);
 
 export const addModules = (version: string, modules: string[], architecture?: string, acceptEula?: boolean) => {
   const args = ["editors", "module", "add", version, "--module", modules.join(" ")];

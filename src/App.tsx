@@ -2,13 +2,15 @@ import { useEffect, useState, useRef } from "react";
 import {
   LayoutDashboard, Gamepad2, FolderOpen, Hammer,
   FlaskConical, Bot, Sparkles, Terminal as TerminalIcon, ScrollText, Settings as SettingsIcon, Info, Download,
-  Circle, ChevronDown, User, LogOut, LogIn, Package,
+  Circle, ChevronDown, User, LogOut, LogIn, Package, X, TerminalSquare,
 } from "lucide-react";
 import { useAppStore } from "@/stores/useAppStore";
 import { useToastStore } from "@/stores/useToastStore";
+import { Button } from "@/components/ui/button";
 import { useI18n } from "@/i18n";
 import { useTheme } from "@/stores/useTheme";
 import * as tauri from "@/lib/tauri";
+import { invoke } from "@tauri-apps/api/core";
 import { cn } from "@/lib/utils";
 
 import { Dashboard } from "@/pages/Dashboard";
@@ -24,6 +26,7 @@ import { Settings } from "@/pages/Settings";
 import { About } from "@/pages/About";
 import { Downloads } from "@/pages/Downloads";
 import { ToastOverlay } from "@/components/ToastOverlay";
+import { FileBrowserModal } from "@/components/FileBrowserModal";
 
 // All page components — kept mounted, hidden when inactive to prevent re-fetch
 const PAGES: Record<string, React.ComponentType> = {
@@ -53,6 +56,9 @@ function App() {
   const { initTheme } = useTheme();
   const showToast = useToastStore(s => s.addToast);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showLoginDialog, setShowLoginDialog] = useState(false);
+  const [loginPolling, setLoginPolling] = useState(false);
+  const [authLoginUrl, setAuthLoginUrl] = useState<string | null>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // Initialize theme, language + check Unity CLI availability + auth status on startup
@@ -132,21 +138,59 @@ function App() {
 
   const handleLogin = async () => {
     setShowUserMenu(false);
+    setShowLoginDialog(true);
+    setLoginPolling(true);
+    setAuthLoginUrl(null);
+
+    // Start unity auth login on server — get the OAuth URL
     try {
-      // authLogin launches browser + polls auth status until login completes or times out
-      const status = await tauri.authLogin();
-      if (status) {
-        const s = status as any;
-        setAuthInfo({
-          loggedIn: s.loggedIn ?? false,
-          name: s.user?.name,
-          email: s.user?.email,
-        });
+      const result = await invoke<{ authUrl: string | null }>("start_auth_login", {});
+      if (result?.authUrl) {
+        setAuthLoginUrl(result.authUrl);
+        // Auto-open the URL in a new tab
+        window.open(result.authUrl, "_blank");
+      } else {
+        showToast("error", t("auth.loginFailed"));
+        setLoginPolling(false);
+        setShowLoginDialog(false);
       }
     } catch (e: any) {
-      console.error("Login failed:", e);
-      showToast("error", e.message || "Login failed");
+      console.error("Failed to start auth login:", e);
+      showToast("error", e.message || t("auth.loginFailed"));
+      setLoginPolling(false);
+      setShowLoginDialog(false);
     }
+
+    // Poll auth status — once user completes login in their browser, detect it
+    let pollCount = 0;
+    const maxPolls = 150; // 5 minutes at 2s interval
+    const poll = async () => {
+      while (pollCount < maxPolls) {
+        pollCount++;
+        try {
+          const status = await tauri.authStatus();
+          if (status?.loggedIn) {
+            setAuthInfo({
+              loggedIn: true,
+              name: status.user?.name,
+              email: status.user?.email,
+            });
+            setShowLoginDialog(false);
+            setLoginPolling(false);
+            showToast("success", t("auth.loginSuccess"));
+            return;
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 2000));
+      }
+      setLoginPolling(false);
+    };
+    poll();
+  };
+
+  const handleLoginCancel = () => {
+    setShowLoginDialog(false);
+    setLoginPolling(false);
   };
 
   const handleLogout = async () => {
@@ -163,6 +207,67 @@ function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <ToastOverlay />
+      <FileBrowserModal />
+
+      {/* Login dialog — for web mode where browser OAuth can't be intercepted */}
+      {showLoginDialog && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50" onClick={handleLoginCancel}>
+          <div className="w-[min(480px,90vw)] rounded-lg border border-border bg-popover p-6 shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <LogIn className="h-4 w-4" /> {t("auth.loginTitle")}
+              </h2>
+              <button onClick={handleLoginCancel} className="rounded-md p-1 hover:bg-accent">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">{t("auth.loginWebHint")}</p>
+
+              {authLoginUrl ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">{t("auth.clickToLogin")}:</div>
+                  <a
+                    href={authLoginUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block break-all rounded-md border border-primary/50 bg-primary/10 p-3 text-xs text-primary hover:bg-primary/20 transition-colors"
+                  >
+                    {authLoginUrl.slice(0, 120)}...
+                  </a>
+                </div>
+              ) : (
+                <div className="rounded-md border border-border bg-black/40 p-3">
+                  <div className="mb-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <TerminalSquare className="h-3.5 w-3.5" /> {t("auth.runInTerminal")}
+                  </div>
+                  <code className="text-xs text-green-400">unity auth login</code>
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                {t("auth.loginPolling")}
+              </p>
+
+              <div className="flex items-center gap-2">
+                {loginPolling && (
+                  <span className="flex items-center gap-1.5 text-xs text-yellow-400">
+                    <span className="h-2 w-2 animate-spin rounded-full border border-yellow-400 border-t-transparent" />
+                    {t("auth.waitingForLogin")}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" size="sm" onClick={handleLoginCancel}>
+                  {t("common.cancel")}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Top bar */}
       <header className="flex h-12 items-center justify-between border-b border-border px-4">
         <div className="flex items-center gap-2">

@@ -3,6 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { Pause, Play, Trash2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/i18n";
 import { cn } from "@/lib/utils";
 
 interface LogLine {
@@ -18,6 +19,7 @@ interface LogStreamProps {
 }
 
 export function LogStream({ eventPrefix, className, height = "300px" }: LogStreamProps) {
+  const { t } = useI18n();
   const [lines, setLines] = useState<LogLine[]>([]);
   const [paused, setPaused] = useState(false);
   const [filter, setFilter] = useState("");
@@ -85,7 +87,7 @@ export function LogStream({ eventPrefix, className, height = "300px" }: LogStrea
           size="icon"
           className="h-7 w-7"
           onClick={() => setPaused(!paused)}
-          title={paused ? "Resume" : "Pause"}
+          title={paused ? t("logStream.resume") : t("logStream.pause")}
         >
           {paused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
         </Button>
@@ -94,14 +96,14 @@ export function LogStream({ eventPrefix, className, height = "300px" }: LogStrea
           size="icon"
           className="h-7 w-7"
           onClick={() => setLines([])}
-          title="Clear"
+          title={t("logStream.clear")}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </Button>
         <div className="relative flex-1">
           <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Filter logs..."
+            placeholder={t("logStream.filterPlaceholder")}
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             className="h-7 pl-8 text-xs"
@@ -119,7 +121,7 @@ export function LogStream({ eventPrefix, className, height = "300px" }: LogStrea
         style={{ height }}
       >
         {filteredLines.length === 0 ? (
-          <span className="text-muted-foreground">Waiting for output...</span>
+          <span className="text-muted-foreground">{t("logStream.waiting")}</span>
         ) : (
           filteredLines.map((line, i) => (
             <div

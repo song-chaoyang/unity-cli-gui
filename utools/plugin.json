@@ -1,5 +1,5 @@
 {
-  "main": "http://localhost:1421",
+  "main": "dist/index.html",
   "logo": "logo.png",
   "preload": "preload.js",
   "features": [
@@ -7,7 +7,7 @@
       "code": "unity-cli-gui",
       "explain": "Unity CLI GUI — 管理编辑器、项目、构建、测试、MCP/AI",
       "platform": ["win32", "darwin", "linux"],
-      "cmds": ["unity", "Unity CLI", "Unity编辑器", "Unity GUI", "Unity管理", "Unity Hub"]
+      "cmds": ["unity", "Unity CLI", "Unity管理", "Unity GUI", "Unity Hub"]
     }
   ]
 }

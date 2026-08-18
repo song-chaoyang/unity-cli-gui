@@ -149,36 +149,150 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+## Web Server Mode (Headless Server)
+
+For servers without a desktop environment (e.g., remote Linux boxes, CI machines), the GUI can run as a **web server** — access it from any device's browser.
+
+### One-Click Install
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/song-chaoyang/unity-cli-gui/main/scripts/install-web.sh | sudo bash
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+irm https://raw.githubusercontent.com/song-chaoyang/unity-cli-gui/main/scripts/install-web.ps1 | iex
+```
+
+The script auto-detects platform (Linux/macOS/Windows) and architecture (x64/arm64):
+
+| Step | Linux | macOS | Windows |
+|------|-------|-------|---------|
+| Node.js | apt/NodeSource (x64+arm64), or nvm fallback | Homebrew or .pkg installer | winget or .msi download |
+| Service | systemd | launchd | Scheduled Task or NSSM |
+| Install dir | `/opt/unity-gui` | `/usr/local/unity-gui` | `C:\unity-gui` |
+
+After installation, access from any browser:
+
+```
+http://<server-ip>:8080
+```
+
+### Options
+
+```bash
+# Linux/macOS
+bash install-web.sh --port 9000 --dir ~/unity-gui
+bash install-web.sh --update
+
+# Windows
+powershell -File install-web.ps1 -Port 9000 -Dir "C:\unity-gui"
+powershell -File install-web.ps1 -Update
+```
+
+### Service Management
+
+**Linux (systemd):**
+```bash
+systemctl status  unity-gui
+systemctl restart unity-gui
+journalctl -u     unity-gui -f
+```
+
+**macOS (launchd):**
+```bash
+launchctl list          com.unity-gui
+launchctl kickstart -k  com.unity-gui   # restart
+launchctl unload        ~/Library/LaunchAgents/com.unity-gui.plist  # stop
+tail -f /tmp/unity-gui.log
+```
+
+**Windows (Scheduled Task / NSSM):**
+```powershell
+Start-ScheduledTask -TaskName UnityGui
+Stop-ScheduledTask  -TaskName UnityGui
+# Or with NSSM: nssm start/stop/restart UnityGui
+```
+
+### Manual Install
+
+```bash
+git clone https://github.com/song-chaoyang/unity-cli-gui.git
+cd unity-cli-gui
+pnpm install
+pnpm build:web
+node web/server.mjs
+```
+
+### Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port` | `8080` | HTTP port |
+| `--dir` | `/opt/unity-gui` | Install directory |
+| `--update` | — | Update existing installation |
+
+### Service Management
+
+```bash
+systemctl status  unity-gui
+systemctl restart unity-gui
+systemctl stop    unity-gui
+journalctl -u     unity-gui -f   # view logs
+```
+
+### Known Limitations (Web Mode)
+
+- **Auth login**: `unity auth login` opens a browser for OAuth — on headless servers, run `unity auth login` directly in a terminal instead.
+- **File dialogs**: Uses browser `prompt()` for server-side path input.
+- **File manager / Terminal / Code editor**: Not available on headless servers (returns info message).
+
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Desktop Framework | Tauri 2.0 |
+| Web Server | Node.js (built-in `http` + SSE) |
 | Frontend | React 18 + TypeScript |
-| Backend | Rust |
+| Backend | Rust (Tauri) / Node.js (Web) |
 | UI | Tailwind CSS + Custom Components |
 | State Management | Zustand |
-| HTTP Client | reqwest (Rust) |
+| HTTP Client | reqwest (Rust) / fetch (Web) |
 | Build Tool | Vite 5 |
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│         React + TypeScript (Frontend)     │
-│  Dashboard │ Editors │ Projects │ AI Chat │
-└───────────────────┬─────────────────────┘
-                    │ Tauri IPC
-┌───────────────────┴─────────────────────┐
-│              Rust Backend (Tauri)         │
-│  cli_executor │ streaming_process        │
-│  ai_chat │ file_io │ git_info            │
-└───────────────────┬─────────────────────┘
-                    │ spawn
-┌───────────────────┴─────────────────────┐
-│          Unity CLI (`unity` binary)       │
-└─────────────────────────────────────────┘
+                           ┌─────────────┐
+                           │   Browser    │  (Web mode — any device)
+                           └──────┬──────┘
+                                  │ HTTP + SSE
+┌─────────────────────────────────┴───────────────────────────┐
+│                    React + TypeScript (Frontend)              │
+│  Dashboard │ Editors │ Projects │ Build │ Test │ AI Chat ...  │
+└───────────────────┬───────────────────────────┬──────────────┘
+                    │ Tauri IPC (invoke/listen)  │ fetch/SSE
+┌───────────────────┴──────────────┐ ┌──────────┴──────────────┐
+│       Rust Backend (Tauri)        │ │  Node.js Server (Web)   │
+│  cli_executor │ streaming_process │ │  run_unity_json │ SSE   │
+│  ai_chat │ file_io │ git_info    │ │  ai_chat │ fs │ spawn   │
+└───────────────────┬──────────────┘ └──────────┬──────────────┘
+                    │ spawn                      │ spawn
+                    └──────────┬────────────────┘
+                               │
+              ┌────────────────┴────────────────┐
+              │     Unity CLI (`unity` binary)   │
+              └─────────────────────────────────┘
 ```
+
+The frontend (`tauri.ts`) is the **single source of truth** — 104 commands mapped to 18 generic primitives. Three build targets share the same frontend code via Vite aliases:
+
+| Build | invoke() → | listen() → | open() → |
+|-------|-----------|------------|---------|
+| Tauri (desktop) | Rust IPC | Tauri events | Native dialog |
+| uTools | preload.js | preload.js | uTools dialog |
+| Web (server) | HTTP fetch | SSE EventSource | browser prompt() |
 
 ## License
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { LogIn, LogOut, Globe, Server, BarChart3, HardDrive, RefreshCw, Download, Trash2, FileText, Stethoscope, Package, Info, Sun, Moon, Monitor, Key, FolderCog, Activity, Terminal as TerminalIcon } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,10 @@ export function Settings() {
   const [licenses, setLicenses] = useState<any>(null);
   const [installPath, setInstallPath] = useState<string>("");
   const [showLicenseActivate, setShowLicenseActivate] = useState(false);
+  const [manualActivate, setManualActivate] = useState(false);
+  const [generatingAlf, setGeneratingAlf] = useState(false);
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [alfGenerated, setAlfGenerated] = useState(false);
   const [licenseSerial, setLicenseSerial] = useState("");
   const [diagTab, setDiagTab] = useState<"doctor" | "diagnose">("doctor");
   const [cliLog, setCliLog] = useState<string[]>([]);
@@ -149,7 +154,31 @@ export function Settings() {
             {authInfo?.loggedIn ? (<><p className="text-sm font-medium">{authInfo.name}</p><p className="text-xs text-muted-foreground">{authInfo.email}</p></>) : (<p className="text-sm text-muted-foreground">{t("dash.notLoggedIn")}</p>)}
           </div>
           <div className="flex gap-2">
-            {authInfo?.loggedIn ? (<Button variant="outline" size="sm" onClick={() => tauri.authLogout()}><LogOut className="mr-2 h-3.5 w-3.5" /> {t("settings.logout")}</Button>) : (<Button size="sm" onClick={() => tauri.authLogin()}><LogIn className="mr-2 h-3.5 w-3.5" /> {t("settings.login")}</Button>)}
+            {authInfo?.loggedIn ? (<Button variant="outline" size="sm" onClick={() => tauri.authLogout()}><LogOut className="mr-2 h-3.5 w-3.5" /> {t("settings.logout")}</Button>) : (<Button size="sm" disabled={loginBusy} onClick={async () => {
+              setLoginBusy(true);
+              try {
+                const result = await invoke<{ authUrl: string | null }>("start_auth_login", {});
+                if (result?.authUrl) {
+                  window.open(result.authUrl, "_blank");
+                  showToast("info", t("auth.loginWebHint"));
+                }
+                for (let i = 0; i < 90; i++) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  try {
+                    const status = await tauri.authStatus();
+                    if (status?.loggedIn) {
+                      setAuthInfo({ loggedIn: true, name: status.user?.name, email: status.user?.email });
+                      showToast("success", t("auth.loginSuccess"));
+                      break;
+                    }
+                  } catch {}
+                }
+              } catch (e: any) {
+                showToast("error", e.message);
+              } finally {
+                setLoginBusy(false);
+              }
+            }}>{loginBusy ? <span className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" /> : <LogIn className="mr-2 h-3.5 w-3.5" />} {loginBusy ? t("auth.waitingForLogin") : t("settings.login")}</Button>)}
           </div>
         </CardContent>
       </Card>
@@ -167,15 +196,88 @@ export function Settings() {
           {showLicenseActivate && (
             <div className="space-y-2 rounded-md border border-border p-3">
               <div><Label>{t("license.serial")}</Label><Input value={licenseSerial} onChange={e => setLicenseSerial(e.target.value)} placeholder={t("license.serialPlaceholder")} className="mt-1" /></div>
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={async () => { try { await tauri.licenseActivate({ personal: true, acceptEula: true }); setShowLicenseActivate(false); setLicenseSerial(""); showToast("success", t("license.active")); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.activatePersonal")}</Button>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" variant="outline" onClick={async () => {
+                  try {
+                    await tauri.licenseActivate({ personal: true, acceptEula: true });
+                    setShowLicenseActivate(false); showToast("success", t("license.active"));
+                    const st = await tauri.licenseStatus(); setLicenseInfo(st);
+                  } catch (e: any) {
+                    // CLI activation failed — try manual activation via Unity Editor
+                    showToast("info", t("license.cliFailed"));
+                    setManualActivate(true);
+                  }
+                }}>{t("license.activatePersonal")}</Button>
                 <Button size="sm" disabled={!licenseSerial} onClick={async () => { try { await tauri.licenseActivate({ serial: licenseSerial, acceptEula: true }); setShowLicenseActivate(false); setLicenseSerial(""); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.activateSerial")}</Button>
                 <Button size="sm" variant="outline" onClick={() => setShowLicenseActivate(false)}>{t("common.cancel")}</Button>
               </div>
             </div>
           )}
-          <div className="flex gap-2">
-            {!showLicenseActivate && <Button variant="outline" size="sm" onClick={() => setShowLicenseActivate(true)}><Key className="mr-2 h-3.5 w-3.5" /> {t("license.activate")}</Button>}
+          {manualActivate && (
+            <div className="space-y-3 rounded-md border border-primary/50 p-3">
+              <div className="text-sm font-medium">{t("license.manualActivation")}</div>
+              <p className="text-xs text-muted-foreground">{t("license.manualHint")}</p>
+              <div className="flex items-center gap-2">
+                <Button size="sm" disabled={generatingAlf} onClick={async () => {
+                  setGeneratingAlf(true);
+                  try {
+                    const result = await invoke<{ fileName: string; content: string }>("generate_license_request", {});
+                    // Download the .alf file
+                    const blob = new Blob([result.content], { type: "application/xml" });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url; a.download = result.fileName;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showToast("success", t("license.alfGenerated"));
+                    setAlfGenerated(true);
+                  } catch (e: any) { showToast("error", e.message); }
+                  finally { setGeneratingAlf(false); }
+                }}>
+                  {generatingAlf ? "..." : t("license.generateAlf")}
+                </Button>
+              </div>
+              {alfGenerated && (
+                <>
+                  <div className="text-xs text-muted-foreground">
+                    1. {t("license.step1")}<br/>
+                    2. {t("license.step2")}<br/>
+                    3. {t("license.step3")}
+                  </div>
+                  <div>
+                    <Label>{t("license.selectUlf")}</Label>
+                    <Input type="file" accept=".ulf,.xml" className="mt-1" onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = async () => {
+                        const content = reader.result as string;
+                        // Write to a temp path on server
+                        const tmpPath = `/tmp/${file.name}`;
+                        await invoke("write_file_content", { path: tmpPath, content });
+                        try {
+                          const result = await invoke<{ success: boolean; stdout: string }>("activate_license_file", { path: tmpPath });
+                          if (result.success) {
+                            showToast("success", t("license.activated"));
+                            setManualActivate(false);
+                            const st = await tauri.licenseStatus();
+                            setLicenseInfo(st);
+                          } else {
+                            showToast("error", result.stdout || "Activation failed");
+                          }
+                        } catch (e: any) { showToast("error", e.message); }
+                      };
+                      reader.readAsText(file);
+                    }} />
+                  </div>
+                </>
+              )}
+              <Button size="sm" variant="outline" onClick={() => setManualActivate(false)}>{t("common.cancel")}</Button>
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {!showLicenseActivate && !manualActivate && <Button variant="outline" size="sm" onClick={() => setShowLicenseActivate(true)}><Key className="mr-2 h-3.5 w-3.5" /> {t("license.activate")}</Button>}
+            {!manualActivate && <Button variant="outline" size="sm" onClick={() => setManualActivate(true)}><FileText className="mr-2 h-3.5 w-3.5" /> {t("license.manualActivate")}</Button>}
             <Button variant="outline" size="sm" onClick={async () => { try { await tauri.licenseReturn(); showToast("success", t("license.return")); const st = await tauri.licenseStatus(); setLicenseInfo(st); } catch (e: any) { showToast("error", e.message); } }}>{t("license.return")}</Button>
           </div>
         </CardContent>

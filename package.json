@@ -6,8 +6,11 @@
   "scripts": {
     "dev": "vite",
     "dev:utools": "vite --config utools/vite.config.ts",
+    "dev:web": "vite --config web/vite.config.ts",
     "build": "tsc && vite build",
     "build:utools": "tsc -p utools/tsconfig.json && vite build --config utools/vite.config.ts",
+    "build:web": "tsc && vite build --config web/vite.config.ts",
+    "serve:web": "node web/server.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

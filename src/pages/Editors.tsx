@@ -150,7 +150,7 @@ export function Editors() {
     !ed.default ? { label: t("editors.ctxSetDefault"), icon: Star, onClick: async () => { try { await tauri.setDefaultEditor(ed.version); loadData(); } catch (e: any) { showToast("error", e.message); } } } : { label: `${t("editors.default")}: ${ed.version}`, icon: Star },
     ed.upgradeTo ? { label: `${t("editors.ctxUpgrade")} → ${ed.upgradeTo}`, icon: ArrowUpCircle, onClick: async () => { try { await tauri.editorsUpgrade(ed.version, true); loadData(); } catch (e: any) { showToast("error", e.message); } } } : undefined,
     { separator: true },
-    { label: t("editors.ctxUninstall"), icon: Trash2, danger: true, onClick: async () => { if (confirm(`Uninstall Unity ${ed.version}?`)) { try { await tauri.uninstallEditor(ed.version); loadData(); } catch (e: any) { showToast("error", e.message); } } } },
+    { label: t("editors.ctxUninstall"), icon: Trash2, danger: true, onClick: async () => { if (confirm(t("editors.confirmUninstall", { version: ed.version }))) { try { await tauri.uninstallEditor(ed.version); loadData(); } catch (e: any) { showToast("error", e.message); } } } },
   ].filter(Boolean) as ContextMenuItem[];
 
   // Group modules by category

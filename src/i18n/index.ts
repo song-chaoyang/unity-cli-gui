@@ -3,7 +3,7 @@ import { translations, resolveLang, type Lang } from "./translations";
 
 interface I18nState {
   lang: Lang;
-  t: (key: string) => string;
+  t: (key: string, params?: Record<string, string | number>) => string;
   setLang: (lang: Lang) => void;
   initFromSystem: () => void;
   initFromCLI: (cliLang: string) => void;
@@ -36,10 +36,16 @@ export const useI18n = create<I18nState>((set, get) => ({
   // Initialize synchronously to prevent English flash on startup
   lang: getInitialLang(),
 
-  t: (key: string) => {
+  t: (key: string, params?: Record<string, string | number>) => {
     const lang = get().lang;
     const dict = translations[lang] || translations.en;
-    return dict[key] ?? translations.en[key] ?? key;
+    let str = dict[key] ?? translations.en[key] ?? key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        str = str.replace(new RegExp(`\\{${k}\\}`, "g"), String(v));
+      }
+    }
+    return str;
   },
 
   setLang: (lang: Lang) => {

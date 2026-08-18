@@ -149,36 +149,126 @@ pnpm tauri dev
 pnpm tauri build
 ```
 
+## Web 服务器模式（无头服务器）
+
+对于没有桌面环境的服务器（如远程 Linux 服务器、CI 机器），GUI 可以作为 **Web 服务器**运行 —— 从任意设备的浏览器访问。
+
+### 一键安装
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/song-chaoyang/unity-cli-gui/main/scripts/install-web.sh | sudo bash
+```
+
+**Windows (以管理员身份运行 PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/song-chaoyang/unity-cli-gui/main/scripts/install-web.ps1 | iex
+```
+
+脚本自动检测平台（Linux/macOS/Windows）和架构（x64/arm64）：
+
+| 步骤 | Linux | macOS | Windows |
+|------|-------|-------|---------|
+| Node.js | apt/NodeSource（x64+arm64），或 nvm 回退 | Homebrew 或 .pkg 安装包 | winget 或 .msi 下载 |
+| 服务 | systemd | launchd | 计划任务 或 NSSM |
+| 安装目录 | `/opt/unity-gui` | `/usr/local/unity-gui` | `C:\unity-gui` |
+
+安装完成后，从任意浏览器访问：
+
+```
+http://<服务器IP>:8080
+```
+
+### 安装选项
+
+```bash
+# Linux/macOS
+bash install-web.sh --port 9000 --dir ~/unity-gui
+bash install-web.sh --update
+
+# Windows
+powershell -File install-web.ps1 -Port 9000 -Dir "C:\unity-gui"
+powershell -File install-web.ps1 -Update
+```
+
+### 服务管理
+
+**Linux (systemd):**
+```bash
+systemctl status  unity-gui
+systemctl restart unity-gui
+journalctl -u     unity-gui -f
+```
+
+**macOS (launchd):**
+```bash
+launchctl list          com.unity-gui
+launchctl kickstart -k  com.unity-gui   # 重启
+tail -f /tmp/unity-gui.log
+```
+
+**Windows (计划任务 / NSSM):**
+```powershell
+Start-ScheduledTask -TaskName UnityGui
+Stop-ScheduledTask  -TaskName UnityGui
+# NSSM: nssm start/stop/restart UnityGui
+```
+
+### 手动安装
+
+```bash
+git clone https://github.com/song-chaoyang/unity-cli-gui.git
+cd unity-cli-gui
+pnpm install
+pnpm build:web
+node web/server.mjs
+```
+
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
 | 桌面框架 | Tauri 2.0 |
+| Web 服务器 | Node.js（内置 `http` + SSE） |
 | 前端 | React 18 + TypeScript |
-| 后端 | Rust |
+| 后端 | Rust (Tauri) / Node.js (Web) |
 | UI | Tailwind CSS + 自定义组件 |
 | 状态管理 | Zustand |
-| HTTP 客户端 | reqwest (Rust) |
+| HTTP 客户端 | reqwest (Rust) / fetch (Web) |
 | 构建工具 | Vite 5 |
 
 ## 架构
 
 ```
-┌─────────────────────────────────────────┐
-│         React + TypeScript (前端)         │
-│  仪表盘 │ 编辑器 │ 项目 │ AI 对话 │ ...   │
-└───────────────────┬─────────────────────┘
-                    │ Tauri IPC
-┌───────────────────┴─────────────────────┐
-│              Rust 后端 (Tauri)             │
-│  cli_executor │ streaming_process        │
-│  ai_chat │ file_io │ git_info            │
-└───────────────────┬─────────────────────┘
-                    │ spawn
-┌───────────────────┴─────────────────────┐
-│          Unity CLI (`unity` 二进制)        │
-└─────────────────────────────────────────┘
+                           ┌─────────────┐
+                           │   浏览器     │  (Web 模式 — 任意设备)
+                           └──────┬──────┘
+                                  │ HTTP + SSE
+┌─────────────────────────────────┴───────────────────────────┐
+│                    React + TypeScript (前端)                 │
+│  仪表盘 │ 编辑器 │ 项目 │ 构建 │ 测试 │ AI 对话 ...         │
+└───────────────────┬───────────────────────────┬──────────────┘
+                    │ Tauri IPC (invoke/listen)  │ fetch/SSE
+┌───────────────────┴──────────────┐ ┌──────────┴──────────────┐
+│       Rust 后端 (Tauri)           │ │  Node.js 服务器 (Web)   │
+│  cli_executor │ streaming_process │ │  run_unity_json │ SSE   │
+│  ai_chat │ file_io │ git_info    │ │  ai_chat │ fs │ spawn   │
+└───────────────────┬──────────────┘ └──────────┬──────────────┘
+                    │ spawn                      │ spawn
+                    └──────────┬────────────────┘
+                               │
+              ┌────────────────┴────────────────┐
+              │     Unity CLI (`unity` 二进制)    │
+              └─────────────────────────────────┘
 ```
+
+前端 (`tauri.ts`) 是**唯一真相源** —— 104 条命令映射到 18 个通用原语。三个构建目标通过 Vite 别名共享同一份前端代码：
+
+| 构建目标 | invoke() → | listen() → | open() → |
+|---------|-----------|------------|---------|
+| Tauri（桌面） | Rust IPC | Tauri 事件 | 原生对话框 |
+| uTools | preload.js | preload.js | uTools 对话框 |
+| Web（服务器） | HTTP fetch | SSE EventSource | 浏览器 prompt() |
 
 ## 许可证
 

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { LoadingSpinner } from "@/components/shared";
 import { useAppStore } from "@/stores/useAppStore";
 import { useI18n } from "@/i18n";
+import { invoke } from "@tauri-apps/api/core";
 import * as tauri from "@/lib/tauri";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -40,6 +41,7 @@ export function Dashboard() {
 
   const [loading, setLoading] = useState(true);
   const [recentPaths, setRecentPaths] = useState<string[]>(loadRecentProjects());
+  const [loginBusy, setLoginBusy] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -100,6 +102,31 @@ export function Dashboard() {
     handleOpenRecent(path);
   };
 
+  const handleDashboardLogin = async () => {
+    setLoginBusy(true);
+    try {
+      const result = await invoke<{ authUrl: string | null }>("start_auth_login", {});
+      if (result?.authUrl) {
+        window.open(result.authUrl, "_blank");
+      }
+      // Poll auth status
+      for (let i = 0; i < 90; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const status = await tauri.authStatus();
+          if (status?.loggedIn) {
+            setAuthInfo({ loggedIn: true, name: status.user?.name, email: status.user?.email });
+            break;
+          }
+        } catch {}
+      }
+    } catch (e: any) {
+      console.error("Login failed:", e);
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -118,7 +145,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{editors.length}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{editors.filter(e => e.default).length > 0 ? `Default: ${editors.find(e => e.default)?.version}` : "No default set"}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{editors.filter(e => e.default).length > 0 ? t("dash.defaultVersion", { version: editors.find(e => e.default)?.version || "" }) : t("dash.noDefault")}</div>
           </CardContent>
         </Card>
 
@@ -129,7 +156,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{projects.length}</div>
-            <div className="mt-1 text-xs text-muted-foreground">{projects.filter(p => p.isFavorite).length} pinned</div>
+            <div className="mt-1 text-xs text-muted-foreground">{projects.filter(p => p.isFavorite).length} {t("dash.pinned")}</div>
           </CardContent>
         </Card>
 
@@ -142,7 +169,7 @@ export function Dashboard() {
             <div className="text-2xl font-bold">{runningCount}</div>
             <div className="mt-1 flex items-center gap-1 text-xs">
               <span className={cn("h-1.5 w-1.5 rounded-full", runningCount > 0 ? "bg-green-400 animate-pulse" : "bg-muted-foreground")} />
-              {runningCount > 0 ? "Active" : "Idle"}
+              {runningCount > 0 ? t("dash.active") : t("dash.idle")}
             </div>
           </CardContent>
         </Card>
@@ -259,9 +286,23 @@ export function Dashboard() {
                 )}
               </div>
             </div>
-            <Badge variant={authInfo?.loggedIn ? "success" : "destructive"}>
-              {authInfo?.loggedIn ? t("dash.connected") : t("dash.offline")}
-            </Badge>
+            {authInfo?.loggedIn ? (
+              <Badge variant="success">{t("dash.connected")}</Badge>
+            ) : (
+              <Button size="sm" disabled={loginBusy} onClick={handleDashboardLogin}>
+                {loginBusy ? (
+                  <>
+                    <span className="mr-1 h-3 w-3 animate-spin rounded-full border border-current border-t-transparent" />
+                    {t("auth.waitingForLogin")}
+                  </>
+                ) : (
+                  <>
+                    <LogIn className="mr-1 h-3.5 w-3.5" />
+                    {t("settings.login")}
+                  </>
+                )}
+              </Button>
+            )}
           </CardContent>
         </Card>
 
