@@ -990,10 +990,22 @@ function listDirectory(dirPath) {
   return { path: resolved, entries: result };
 }
 
-// ─── Auth Login (extract URL from stdout + log for headless servers) ──────────
+// ─── Auth Login (extract URL from stdout + keep process alive for polling) ───
+
+// Track the auth login process so we can kill it before starting a new one
+// or on server shutdown. NOT added to runningProcesses — we don't want the
+// SSE disconnect handler to kill it (the user may refresh the page during login).
+let authLoginChild = null;
 
 async function startAuthLogin() {
   const binary = requireUnity();
+
+  // Kill any existing auth login process before starting a new one
+  if (authLoginChild) {
+    try { authLoginChild.kill("SIGTERM"); } catch {}
+    try { authLoginChild.kill("SIGKILL"); } catch {}
+    authLoginChild = null;
+  }
 
   // Determine log file path
   const home = process.env.HOME || process.env.USERPROFILE || "";
@@ -1006,10 +1018,29 @@ async function startAuthLogin() {
     prevLineCount = content.split("\n").length;
   } catch {}
 
-  // Start unity auth login and capture stdout (NOT detached — we kill it after extracting URL)
+  // Start unity auth login — the process MUST stay alive so it can:
+  // 1. Poll Unity's servers for OAuth completion
+  // 2. Save the auth token locally when login succeeds
+  // The CLI exits on its own after login completes or after its internal
+  // timeout (~5 min). We also add a safety timeout below.
   const child = spawn(binary, ["auth", "login"], {
     stdio: ["ignore", "pipe", "pipe"],
   });
+  authLoginChild = child;
+
+  // Clean up reference when the process exits
+  child.on("close", () => {
+    if (authLoginChild === child) authLoginChild = null;
+  });
+
+  // Safety timeout — kill after 5 minutes if still running (CLI should exit
+  // on its own before this, but this prevents zombie processes)
+  setTimeout(() => {
+    if (authLoginChild === child) {
+      try { child.kill("SIGTERM"); } catch {}
+      authLoginChild = null;
+    }
+  }, 300000);
 
   // Collect stdout — CLI v1.0+ prints the auth URL directly to stdout
   let stdoutData = "";
@@ -1018,10 +1049,9 @@ async function startAuthLogin() {
   const authUrl = await new Promise((resolve) => {
     const deadline = Date.now() + 15000;
 
-    // Check stdout for URL (CLI prints "Sign-in URL:\n  https://...")
+    // Check stdout for URL
     child.stdout?.on("data", (chunk) => {
       stdoutData += chunk.toString();
-      // Look for URL in stdout — CLI prints it as plain text
       const urlMatch = stdoutData.match(/https:\/\/services\.api\.unity\.com\/app-linking\/v1\/login\/redirect\/[^\s]+/);
       if (urlMatch) {
         resolve(urlMatch[0]);
@@ -1031,14 +1061,12 @@ async function startAuthLogin() {
 
     // Also poll the log file (older CLI versions write URL there)
     const check = () => {
-      // Check stdout first
       const urlMatch = stdoutData.match(/https:\/\/services\.api\.unity\.com\/app-linking\/v1\/login\/redirect\/[^\s]+/);
       if (urlMatch) {
         resolve(urlMatch[0]);
         return;
       }
 
-      // Check log file
       try {
         const content = fs.readFileSync(logFile, "utf8");
         const lines = content.split("\n");
@@ -1061,11 +1089,9 @@ async function startAuthLogin() {
     setTimeout(check, 500);
   });
 
-  // Kill the auth login process — we only needed it to get the URL.
-  // The CLI's cloud polling continues server-side; keeping the process
-  // alive wastes memory and causes OOM kills.
-  try { child.kill("SIGTERM"); } catch {}
-  try { child.kill("SIGKILL"); } catch {}
+  // Do NOT kill the process — it must stay alive to poll for OAuth completion
+  // and save the auth token. The frontend polls `auth status` to detect
+  // when login succeeds. The process exits on its own after completion.
 
   return { authUrl };
 }
