@@ -159,14 +159,18 @@ async function detectCliFormat() {
   try {
     // Try new CLI: global --json --no-banner prefix
     const { stdout, code } = await runUnityRawInternal(binary, ["--json", "--no-banner", "editors", "--installed"]);
-    if (code === 0) {
+    // Even if exit code is non-zero (e.g. no Hub installed), the CLI may still
+    // produce valid JSON with the {success, data, errors} envelope. Parse stdout
+    // to determine format — don't rely on exit code alone.
+    try {
       const parsed = JSON.parse(stdout);
       if (parsed && typeof parsed === "object" && "success" in parsed) {
         cliFormat = "new";
         return cliFormat;
       }
-      // Raw JSON without envelope — could be old CLI that also accepts global --json
-      // Check if it's an array (old CLI returns raw array) or object with data
+    } catch {}
+    // stdout is not valid JSON envelope — if code was 0, it might be raw JSON (old CLI)
+    if (code === 0) {
       cliFormat = "new";
       return cliFormat;
     }
@@ -645,6 +649,21 @@ async function runUnityJsonOld(binary, args) {
   for (let attempt = 0; attempt < 6; attempt++) {
     const { stdout, stderr, code } = await runUnityRawInternal(binary, [...currentArgs, "--json"]);
     if (code !== 0) {
+      // Before throwing, try to parse stdout as JSON — the CLI may return
+      // valid JSON with success:true even on non-zero exit codes (e.g.
+      // `auth status` exits code 3 when session expired but JSON is valid).
+      try {
+        const parsed = JSON.parse(stdout);
+        if (parsed && typeof parsed === "object" && "success" in parsed) {
+          if (parsed.success) return unwrapEnvelope(parsed);
+          // success:false — for auth status, return data so frontend can
+          // check loggedIn field
+          if (currentArgs.join(" ").startsWith("auth status") && parsed.data) {
+            return parsed.data;
+          }
+        }
+      } catch {}
+      // JSON parse failed or success:false — check for unknown option to retry
       const optMatch = stderr.match(/unknown option '([^']+)'/);
       if (optMatch) {
         const opt = optMatch[1];
@@ -714,23 +733,19 @@ async function runUnityPlain(args) {
       const translated = translateOldCli(args);
       if (translated === null) throw new Error("old-cli-not-supported");
       const cleanArgs = translated.filter(a => a !== "--yes");
-      const { stdout, stderr, code } = await runUnityRawInternal(binary, cleanArgs);
-      if (code !== 0) throw new Error(`exit ${code}`);
+      const { stdout } = await runUnityRawInternal(binary, cleanArgs);
       return stdout;
     } catch {
       // Fallback: try new format (no --json, just run directly)
-      const { stdout, stderr, code } = await runUnityRawInternal(binary, args);
-      if (code !== 0) {
-        throw new Error(`unity ${args.join(" ")} exited with code ${code}\n${stderr}`);
-      }
+      const { stdout } = await runUnityRawInternal(binary, args);
       return stdout;
     }
   }
 
-  const { stdout, stderr, code } = await runUnityRawInternal(binary, args);
-  if (code !== 0) {
-    throw new Error(`unity ${args.join(" ")} exited with code ${code}\n${stderr}`);
-  }
+  // Return stdout regardless of exit code — the CLI uses exit codes as
+  // secondary signals (e.g. `auth status` exits 3 when session expired
+  // but still prints valid output to stdout).
+  const { stdout } = await runUnityRawInternal(binary, args);
   return stdout;
 }
 

@@ -1,14 +1,17 @@
 // ==UserScript==
-// @name         Codely Marketplace 技能发布助手
+// @name         Codely 市场发布助手
 // @namespace    https://codely.tuanjie.cn
 // @version      2.0.0
-// @description  在 Codely 插件市场页面添加"发布技能"和"我的插件"按钮，支持上传 zip 发布 skill/extension，查看/删除已发布插件，在详情页标题旁预览压缩包内容（支持 Markdown 渲染 + 多语言翻译，国内可用）
+// @description  🚀 一键发布插件到 Codely 市场 — 导航栏添加「发布技能」「我的插件」「预览内容」三大功能。上传 zip 发布/管理已发布插件/详情页预览压缩包内容（Markdown 渲染 + 多语言翻译，国内可用）
 // @author       chaoyang
 // @match        https://codely.tuanjie.cn/*
 // @icon         https://codely.tuanjie.cn/static/dist/favicon.ico
 // @require      https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js
 // @require      https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js
 // @grant        none
+// @license      MIT
+// @homepageURL  https://codely.tuanjie.cn/marketplace
+// @supportURL   https://github.com/song-chaoyang/unity-cli-gui/issues
 // ==/UserScript==
 
 (function () {

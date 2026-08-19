@@ -89,43 +89,43 @@ pub async fn run_unity_json<T: serde::de::DeserializeOwned>(args: &[&str]) -> Ap
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let code = output.status.code().unwrap_or(-1);
 
-    if !output.status.success() {
-        let code = output.status.code().unwrap_or(-1);
-        return Err(AppError::cli(CliError {
-            code,
-            message: format!("unity {} exited with code {}", args.join(" "), code),
-            stderr,
-        }));
+    // Try to parse stdout JSON first — the CLI may return valid JSON with
+    // success:true even on non-zero exit codes (e.g. `auth status` exits 3
+    // when session is expired, but stdout JSON is valid and usable).
+    match serde_json::from_str::<CliResponse<T>>(&stdout) {
+        Ok(response) if response.success => Ok(response.data),
+        Ok(response) => {
+            let msg = if response.errors.is_empty() {
+                "Command reported failure without error message".to_string()
+            } else {
+                response.errors.join("; ")
+            };
+            Err(AppError::cli(CliError { code, message: msg, stderr }))
+        }
+        Err(_) if !output.status.success() => {
+            Err(AppError::cli(CliError {
+                code,
+                message: format!("unity {} exited with code {}", args.join(" "), code),
+                stderr,
+            }))
+        }
+        Err(e) => {
+            Err(AppError::io(&format!(
+                "Failed to parse JSON output from unity: {}\nstdout: {}",
+                e,
+                &stdout[..stdout.len().min(500)]
+            )))
+        }
     }
-
-    // Parse JSON output
-    let response: CliResponse<T> = serde_json::from_str(&stdout).map_err(|e| {
-        AppError::io(&format!(
-            "Failed to parse JSON output from unity: {}\nstdout: {}",
-            e,
-            &stdout[..stdout.len().min(500)]
-        ))
-    })?;
-
-    if !response.success {
-        let msg = if response.errors.is_empty() {
-            "Command reported failure without error message".to_string()
-        } else {
-            response.errors.join("; ")
-        };
-        return Err(AppError::cli(CliError {
-            code: 1,
-            message: msg,
-            stderr,
-        }));
-    }
-
-    Ok(response.data)
 }
 
 /// Run a `unity` command without JSON parsing (for human-readable or streaming use).
-/// Returns raw stdout.
+/// Returns raw stdout. Does NOT throw on non-zero exit codes — the CLI uses exit
+/// codes as secondary signals (e.g. `auth status` exits 3 when session expired
+/// but still prints valid output). Callers that need error checking should parse
+/// the output themselves.
 pub async fn run_unity_plain(args: &[&str]) -> AppResult<String> {
     let binary = require_unity()?;
 
@@ -137,19 +137,7 @@ pub async fn run_unity_plain(args: &[&str]) -> AppResult<String> {
         .await
         .map_err(|e| AppError::io(&format!("Failed to spawn unity: {}", e)))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    if !output.status.success() {
-        let code = output.status.code().unwrap_or(-1);
-        return Err(AppError::cli(CliError {
-            code,
-            message: format!("unity {} exited with code {}", args.join(" "), code),
-            stderr,
-        }));
-    }
-
-    Ok(stdout)
+    Ok(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
 /// Build a CLI command string for display (the "Copy CLI Command" feature).

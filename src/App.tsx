@@ -142,23 +142,21 @@ function App() {
     setLoginPolling(true);
     setAuthLoginUrl(null);
 
-    // Start unity auth login on server — get the OAuth URL
+    // Start auth login — in Tauri mode the CLI opens the browser itself
+    // (authUrl is null). In web mode the server extracts the OAuth URL
+    // from the CLI's stdout and returns it for the frontend to open.
     try {
       const result = await invoke<{ authUrl: string | null }>("start_auth_login", {});
       if (result?.authUrl) {
         setAuthLoginUrl(result.authUrl);
-        // Auto-open the URL in a new tab
         window.open(result.authUrl, "_blank");
-      } else {
-        showToast("error", t("auth.loginFailed"));
-        setLoginPolling(false);
-        setShowLoginDialog(false);
       }
     } catch (e: any) {
       console.error("Failed to start auth login:", e);
       showToast("error", e.message || t("auth.loginFailed"));
       setLoginPolling(false);
       setShowLoginDialog(false);
+      return;
     }
 
     // Poll auth status — once user completes login in their browser, detect it

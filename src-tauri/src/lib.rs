@@ -31,6 +31,7 @@ pub fn run() {
             commands::core::get_project_meta,
             commands::core::set_project_meta,
             commands::core::get_system_locale,
+            commands::core::start_auth_login,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -305,3 +305,20 @@ pub async fn get_system_locale() -> String {
     }
     "en".to_string()
 }
+
+// ─── Auth login (start streaming process) ────────────────────────────────────
+
+#[derive(Debug, Serialize)]
+pub struct AuthLoginResult {
+    auth_url: Option<String>,
+}
+
+/// Start `unity auth login` as a streaming process. The CLI opens the browser
+/// itself and polls Unity's cloud servers for OAuth completion. Returns
+/// `{ authUrl: null }` — the frontend polls `auth status` to detect completion.
+#[tauri::command]
+pub async fn start_auth_login(app: AppHandle) -> AppResult<AuthLoginResult> {
+    let args_ref: [&str; 2] = ["auth", "login"];
+    streaming_process::start_streaming(&app, "auth-login", &args_ref, false).await?;
+    Ok(AuthLoginResult { auth_url: None })
+}
