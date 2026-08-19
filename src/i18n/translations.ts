@@ -230,6 +230,9 @@ const en: Dict = {
   "about.unityCliVersion": "Unity CLI Version",
   "about.checkUpdate": "Check for Updates",
   "about.openRepo": "Open Repository",
+  "about.starRepo": "Star on GitHub",
+  "about.starHint": "If you find this project helpful, please give it a star on GitHub — it helps others discover it and keeps the project going!",
+  "about.repoUrl": "https://github.com/song-chaoyang/unity-cli-gui",
   "about.appDescription": "A cross-platform desktop GUI for the Unity CLI tool. Manage Unity editors, projects, builds, tests, and AI/MCP integration from a single application.",
 
   // License
@@ -777,6 +780,9 @@ const zh_cn: Dict = {
   "about.unityCliVersion": "Unity CLI 版本",
   "about.checkUpdate": "检查更新",
   "about.openRepo": "打开仓库",
+  "about.starRepo": "GitHub 打星",
+  "about.starHint": "如果这个项目对你有帮助，请到 GitHub 给个 Star ⭐ — 你的一颗星是对作者最大的鼓励，也能让更多人发现这个项目！",
+  "about.repoUrl": "https://github.com/song-chaoyang/unity-cli-gui",
   "about.appDescription": "Unity CLI 的跨平台桌面 GUI 工具。通过一个应用程序管理 Unity 编辑器、项目、构建、测试和 AI/MCP 集成。",
 
   // License
@@ -1244,6 +1250,9 @@ const ja: Dict = {
   "about.techStack": "技術スタック",
   "about.checkUpdate": "更新を確認",
   "about.openRepo": "リポジトリを開く",
+  "about.starRepo": "GitHubでスター",
+  "about.starHint": "このプロジェクトが役に立ったら、GitHubでスターをお願いします ⭐ — 他の人にも見つけてもらいやすくなり、開発の励みになります！",
+  "about.repoUrl": "https://github.com/song-chaoyang/unity-cli-gui",
   "downloads.title": "ダウンロード",
   "downloads.desc": "アクティブなダウンロードとバックグラウンド操作を追跡",
   "downloads.active": "アクティブなダウンロード",
@@ -1382,6 +1391,9 @@ const ko: Dict = {
   "about.techStack": "기술 스택",
   "about.checkUpdate": "업데이트 확인",
   "about.openRepo": "저장소 열기",
+  "about.starRepo": "GitHub에서 스타",
+  "about.starHint": "이 프로젝트가 도움이 되셨다면 GitHub에서 스타를 부탁드립니다 ⭐ — 더 많은 사람들이 이 프로젝트를 발견할 수 있고, 개발에 큰 힘이 됩니다!",
+  "about.repoUrl": "https://github.com/song-chaoyang/unity-cli-gui",
   "downloads.title": "다운로드",
   "downloads.desc": "활성 다운로드 및 백그라운드 작업 추적",
   "downloads.active": "활성 다운로드",
