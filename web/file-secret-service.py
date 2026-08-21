@@ -22,7 +22,11 @@ SECRET_FILE = os.path.join(HOME, ".local", "share", "file-keyring", "secrets.jso
 
 BUS_NAME = "org.freedesktop.secrets"
 SERVICE_PATH = "/org/freedesktop/secrets"
+# libsecret clients (secret-tool, Unity CLI) resolve the default collection
+# via the "default" alias, but fall back to the conventional "login" path —
+# register BOTH so every client finds a collection.
 COLLECTION_PATH = SERVICE_PATH + "/collection/default"
+LOGIN_COLLECTION_PATH = SERVICE_PATH + "/collection/login"
 SESSION_BASE = SERVICE_PATH + "/session"
 
 IFACE_SERVICE = "org.freedesktop.Secret.Service"
@@ -212,7 +216,7 @@ class SecretService(dbus.service.Object):
 
     @dbus.service.method(IFACE_SERVICE, in_signature="", out_signature="ao")
     def GetCollections(self):
-        return [dbus.ObjectPath(COLLECTION_PATH)]
+        return [dbus.ObjectPath(COLLECTION_PATH), dbus.ObjectPath(LOGIN_COLLECTION_PATH)]
 
     @dbus.service.method(IFACE_SERVICE, in_signature="a{sv}s", out_signature="oo")
     def CreateCollection(self, properties, alias):
@@ -241,6 +245,8 @@ class SecretService(dbus.service.Object):
     def ReadAlias(self, alias):
         if alias == "default":
             return dbus.ObjectPath(COLLECTION_PATH)
+        if alias == "login":
+            return dbus.ObjectPath(LOGIN_COLLECTION_PATH)
         return dbus.ObjectPath("/")
 
     @dbus.service.method(IFACE_SERVICE, in_signature="os", out_signature="")
@@ -250,14 +256,32 @@ class SecretService(dbus.service.Object):
 
 # ── main ───────────────────────────────────────────────────────────────────
 
+# Module-level references keep the D-Bus objects alive. dbus-python releases
+# the well-known bus name when the BusName object is garbage-collected, and
+# exported objects are unregistered when their Object instance is collected —
+# so these MUST be held for the lifetime of the process.
+_bus_name = None
+_service_obj = None
+_collection_objs = []
+_item_objs = []
+
+
 def main():
+    global _bus_name, _service_obj, _collection_objs, _item_objs
     _load()
+    # Exporting objects requires a main loop attached to the connection —
+    # without this, dbus-python raises "connections must be attached to a
+    # main loop" when registering the service objects.
+    from dbus.mainloop.glib import DBusGMainLoop
+    dbus.set_default_main_loop(DBusGMainLoop())
     bus = dbus.SessionBus()
-    dbus.service.BusName(BUS_NAME, bus)
-    SecretService(bus, SERVICE_PATH)
-    CollectionObject(bus, COLLECTION_PATH)
-    for path in _secrets:
-        ItemObject(bus, path)
+    _bus_name = dbus.service.BusName(BUS_NAME, bus)
+    _service_obj = SecretService(bus, SERVICE_PATH)
+    _collection_objs = [
+        CollectionObject(bus, COLLECTION_PATH),
+        CollectionObject(bus, LOGIN_COLLECTION_PATH),
+    ]
+    _item_objs = [ItemObject(bus, path) for path in _secrets]
     print("[file-secret-service] ready, "
           f"{len(_secrets)} secrets loaded", flush=True)
     GLib.MainLoop().run()
