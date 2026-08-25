@@ -59,7 +59,9 @@ function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [loginPolling, setLoginPolling] = useState(false);
   const [authLoginUrl, setAuthLoginUrl] = useState<string | null>(null);
+  const [cliVersion, setCliVersion] = useState("—");
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const loginCancelledRef = useRef(false);
 
   // Initialize theme, language + check Unity CLI availability + auth status on startup
   useEffect(() => {
@@ -75,6 +77,12 @@ function App() {
         const available = await tauri.checkUnityAvailable();
         const path = available ? await tauri.getUnityPath() : null;
         setUnityAvailable(available, path);
+        if (available) {
+          try {
+            const upgrade = await tauri.checkCliUpdate();
+            setCliVersion(upgrade.currentVersion || "—");
+          } catch {}
+        }
       } catch {
         setUnityAvailable(false, null);
       }
@@ -110,11 +118,19 @@ function App() {
   }, []);
 
   // Cmd+, (macOS) or Ctrl+, shortcut to Settings
+  // Cmd+T (macOS) or Ctrl+T shortcut to Terminal
+  // Cmd+Shift+M (macOS) or Ctrl+Shift+M shortcut to toggle maximize
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === ",") {
         e.preventDefault();
         setPage("settings");
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "t" && !e.shiftKey) {
+        e.preventDefault();
+        setPage("terminal");
+      } else if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "m" || e.key === "M")) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("toggle-maximize"));
       }
     };
     document.addEventListener("keydown", handler);
@@ -141,6 +157,7 @@ function App() {
     setShowLoginDialog(true);
     setLoginPolling(true);
     setAuthLoginUrl(null);
+    loginCancelledRef.current = false;
 
     // Start auth login — in Tauri mode the CLI opens the browser itself
     // (authUrl is null). In web mode the server extracts the OAuth URL
@@ -163,7 +180,7 @@ function App() {
     let pollCount = 0;
     const maxPolls = 150; // 5 minutes at 2s interval
     const poll = async () => {
-      while (pollCount < maxPolls) {
+      while (pollCount < maxPolls && !loginCancelledRef.current) {
         pollCount++;
         try {
           const status = await tauri.authStatus();
@@ -187,6 +204,7 @@ function App() {
   };
 
   const handleLoginCancel = () => {
+    loginCancelledRef.current = true;
     setShowLoginDialog(false);
     setLoginPolling(false);
   };
@@ -380,7 +398,7 @@ function App() {
       {/* Status bar */}
       <footer className="flex h-7 items-center justify-between border-t border-border px-4 text-xs text-muted-foreground">
         <div className="flex items-center gap-4">
-          <span>CLI v1.0.0-beta.3</span>
+          <span>CLI v{cliVersion}</span>
           {authInfo?.loggedIn ? (
             <span className="flex items-center gap-1">
               <Circle className="h-2 w-2 fill-green-400 text-green-400" />

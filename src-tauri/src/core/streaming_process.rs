@@ -90,6 +90,9 @@ async fn spawn_and_stream(
                 );
             }
             _ = cancel_rx => {
+                // Kill the child process so it doesn't keep running in the background
+                let _ = child.kill().await;
+                let _ = child.wait().await;
                 let _ = app_clone.emit(
                     &format!("{}-exit", prefix),
                     serde_json::json!({ "code": -2, "success": false, "command": cmd_str_for_closure, "cancelled": true }),

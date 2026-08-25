@@ -36,14 +36,14 @@ export function LogStream({ eventPrefix, className, height = "300px" }: LogStrea
     const setup = async () => {
       const stdoutUn = await listen<{ line: string }>(`${eventPrefix}-stdout`, (event) => {
         if (!pausedRef.current) {
-          setLines((prev) => [...prev, { text: event.payload.line, type: "stdout", timestamp: Date.now() }]);
+          setLines((prev) => [...prev.slice(-999), { text: event.payload.line, type: "stdout", timestamp: Date.now() }]);
         }
       });
       unlisteners.push(stdoutUn);
 
       const stderrUn = await listen<{ line: string }>(`${eventPrefix}-stderr`, (event) => {
         if (!pausedRef.current) {
-          setLines((prev) => [...prev, { text: event.payload.line, type: "stderr", timestamp: Date.now() }]);
+          setLines((prev) => [...prev.slice(-999), { text: event.payload.line, type: "stderr", timestamp: Date.now() }]);
         }
       });
       unlisteners.push(stderrUn);

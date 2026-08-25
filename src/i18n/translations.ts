@@ -49,6 +49,8 @@ const en: Dict = {
   "common.no": "No",
   "common.success": "Success",
   "common.error": "Error",
+  "common.saved": "Saved",
+  "common.cleared": "Cleared",
   "common.notFound": "Not Found",
 
   // Dashboard
@@ -540,6 +542,7 @@ const en: Dict = {
   "settings.optOut": "Opt Out",
   "settings.cacheMgmt": "Cache Management",
   "settings.cleanCache": "Clean Cache",
+  "settings.cacheCleaned": "Cache cleaned",
   "settings.cliMgmt": "CLI Management",
   "settings.checkUpdate": "Check Update",
   "settings.changelog": "Changelog",
@@ -604,6 +607,8 @@ const zh_cn: Dict = {
   "common.no": "否",
   "common.success": "成功",
   "common.error": "错误",
+  "common.saved": "已保存",
+  "common.cleared": "已清除",
   "common.notFound": "未找到",
 
   "dash.title": "仪表板",
@@ -1083,6 +1088,7 @@ const zh_cn: Dict = {
   "settings.optOut": "禁止",
   "settings.cacheMgmt": "缓存管理",
   "settings.cleanCache": "清理缓存",
+  "settings.cacheCleaned": "缓存已清理",
   "settings.cliMgmt": "CLI 管理",
   "settings.checkUpdate": "检查更新",
   "settings.changelog": "更新日志",

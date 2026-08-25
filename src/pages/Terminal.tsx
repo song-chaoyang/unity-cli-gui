@@ -48,6 +48,13 @@ export function TerminalPage() {
     inputRef.current?.focus();
   }, [activeTabId]);
 
+  // Listen for global toggle-maximize shortcut (⌘+Shift+M / Ctrl+Shift+M)
+  useEffect(() => {
+    const handler = () => setMaximized(prev => !prev);
+    window.addEventListener("toggle-maximize", handler);
+    return () => window.removeEventListener("toggle-maximize", handler);
+  }, []);
+
   const updateTab = (id: number, updater: (tab: TabState) => TabState) => {
     setTabs(prev => prev.map(tab => tab.id === id ? updater(tab) : tab));
   };

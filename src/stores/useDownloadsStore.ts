@@ -4,6 +4,7 @@ export interface DownloadTask {
   id: string;
   title: string;
   eventPrefix: string;
+  processId?: number;
   status: "running" | "completed" | "failed" | "cancelled";
   output: string[];
   startTime: number;
@@ -13,6 +14,7 @@ export interface DownloadTask {
 interface DownloadsState {
   tasks: DownloadTask[];
   addTask: (task: Omit<DownloadTask, "status" | "output" | "startTime">) => void;
+  setTaskProcessId: (id: string, processId: number) => void;
   completeTask: (eventPrefix: string, success: boolean, cancelled?: boolean) => void;
   updateTaskOutput: (eventPrefix: string, line: string) => void;
   cancelTask: (id: string) => void;
@@ -30,6 +32,12 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
       startTime: Date.now(),
     };
     set(state => ({ tasks: [fullTask, ...state.tasks] }));
+  },
+
+  setTaskProcessId: (id: string, processId: number) => {
+    set(state => ({
+      tasks: state.tasks.map(t => t.id === id ? { ...t, processId } : t),
+    }));
   },
 
   completeTask: (eventPrefix, success, cancelled) => {
@@ -58,10 +66,9 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
 
   cancelTask: (id) => {
     const task = get().tasks.find(t => t.id === id);
-    if (task) {
-      // Import cancel_process dynamically to avoid circular dependency
+    if (task?.processId !== undefined) {
       import("@/lib/tauri").then(tauri => {
-        tauri.cancelProcess(parseInt(id)).catch(() => {});
+        tauri.cancelProcess(task.processId!).catch(() => {});
       });
     }
   },

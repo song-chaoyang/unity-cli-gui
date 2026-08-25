@@ -204,9 +204,14 @@ export function FileBrowserModal() {
                       isSelected ? "bg-primary text-primary-foreground" : "hover:bg-accent"
                     )}
                     onClick={() => {
-                      if (entry.isDir) navigateTo(fp);
-                      else selectEntry(entry);
+                      if (entry.isDir) {
+                        if (mode === "directory") selectEntry(entry);
+                        else navigateTo(fp);
+                      } else {
+                        selectEntry(entry);
+                      }
                     }}
+                    onDoubleClick={() => { if (entry.isDir) navigateTo(fp); }}
                     onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); handleContextMenu(e, entry); }}
                   >
                     {entry.isDir ? (

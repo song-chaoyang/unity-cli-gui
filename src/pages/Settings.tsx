@@ -308,7 +308,7 @@ export function Settings() {
           <div className="flex gap-1">
             <Input value={installPath} onChange={e => setInstallPath(e.target.value)} className="flex-1" />
             <Button variant="outline" size="icon" onClick={handleBrowseInstallPath}><FolderCog className="h-4 w-4" /></Button>
-            <Button size="sm" onClick={() => tauri.setInstallPath(installPath)}>{t("common.save")}</Button>
+            <Button size="sm" onClick={() => tauri.setInstallPath(installPath).then(() => showToast("success", t("common.saved"))).catch(e => showToast("error", e.message))}>{t("common.save")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -336,7 +336,7 @@ export function Settings() {
             <div><Label>{t("settings.proxyUrl")}</Label><Input value={proxyUrl} onChange={e => setProxyUrl(e.target.value)} placeholder="http://user:pass@host:8080" className="mt-1" /></div>
             <div><Label>{t("settings.bypass")}</Label><Input value={proxyBypass} onChange={e => setProxyBypass(e.target.value)} placeholder="localhost,127.0.0.1" className="mt-1" /></div>
           </div>
-          <div className="flex gap-2"><Button size="sm" onClick={() => tauri.setProxy(proxyUrl, proxyBypass || undefined)}>{t("common.save")}</Button><Button size="sm" variant="outline" onClick={() => tauri.unsetProxy()}>{t("common.clear")}</Button></div>
+          <div className="flex gap-2"><Button size="sm" onClick={() => tauri.setProxy(proxyUrl, proxyBypass || undefined).then(() => showToast("success", t("common.saved"))).catch(e => showToast("error", e.message))}>{t("common.save")}</Button><Button size="sm" variant="outline" onClick={() => tauri.unsetProxy().then(() => { setProxyUrl(""); showToast("success", t("common.cleared")); }).catch(e => showToast("error", e.message))}>{t("common.clear")}</Button></div>
         </CardContent>
       </Card>
 
@@ -346,8 +346,8 @@ export function Settings() {
         <CardContent className="flex items-center justify-between">
           <p className="text-sm text-muted-foreground">{t("settings.status")}: <Badge variant={analyticsOpt === "opted-in" ? "success" : "secondary"}>{analyticsOpt || "—"}</Badge></p>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptIn(); setAnalyticsOpt("opted-in"); }}>{t("settings.optIn")}</Button>
-            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptOut(); setAnalyticsOpt("opted-out"); }}>{t("settings.optOut")}</Button>
+            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptIn().then(() => setAnalyticsOpt("opted-in")).catch(e => showToast("error", e.message)); }}>{t("settings.optIn")}</Button>
+            <Button variant="outline" size="sm" onClick={() => { tauri.analyticsOptOut().then(() => setAnalyticsOpt("opted-out")).catch(e => showToast("error", e.message)); }}>{t("settings.optOut")}</Button>
           </div>
         </CardContent>
       </Card>
@@ -357,7 +357,7 @@ export function Settings() {
         <CardHeader><CardTitle className="flex items-center gap-2"><HardDrive className="h-4 w-4" /> {t("settings.cacheMgmt")}</CardTitle></CardHeader>
         <CardContent className="flex items-center justify-between">
           <div>{cacheInfo ? (<><p className="text-sm font-medium">{cacheInfo.size} ({cacheInfo.fileCount} files)</p><p className="text-xs text-muted-foreground">{cacheInfo.path}</p></>) : <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}</div>
-          <Button variant="outline" size="sm" onClick={() => tauri.cacheClean().then(() => tauri.cacheInfo().then(setCacheInfo))}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.cleanCache")}</Button>
+          <Button variant="outline" size="sm" onClick={() => tauri.cacheClean().then(() => { showToast("success", t("settings.cacheCleaned")); return tauri.cacheInfo(); }).then(setCacheInfo).catch(e => showToast("error", e.message))}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.cleanCache")}</Button>
         </CardContent>
       </Card>
 
@@ -366,11 +366,11 @@ export function Settings() {
         <CardHeader><CardTitle>{t("settings.cliMgmt")}</CardTitle></CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2"><Badge variant={updateInfo?.updateAvailable ? "warning" : "success"}>v1.0.0-beta.3</Badge>{updateInfo?.updateAvailable && <span className="text-xs text-yellow-400">{t("settings.updateAvailable")}</span>}</div>
+            <div className="flex items-center gap-2"><Badge variant={updateInfo?.updateAvailable ? "warning" : "success"}>{updateInfo ? `v${updateInfo.currentVersion}` : "—"}</Badge>{updateInfo?.updateAvailable && <span className="text-xs text-yellow-400">{t("settings.updateAvailable")}</span>}</div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={handleChangelog}><FileText className="mr-2 h-3.5 w-3.5" /> {t("settings.changelog")}</Button>
-              <Button variant="outline" size="sm" onClick={() => tauri.checkCliUpdate().then(setUpdateInfo)}><RefreshCw className="mr-2 h-3.5 w-3.5" /> {t("settings.checkUpdate")}</Button>
-              <Button size="sm" onClick={() => tauri.startCliUpgrade(true)}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.upgradeCli")}</Button>
+              <Button variant="outline" size="sm" onClick={() => tauri.checkCliUpdate().then(setUpdateInfo).catch(e => showToast("error", e.message))}><RefreshCw className="mr-2 h-3.5 w-3.5" /> {t("settings.checkUpdate")}</Button>
+              <Button size="sm" onClick={() => tauri.startCliUpgrade(true).catch(e => showToast("error", e.message))}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.upgradeCli")}</Button>
             </div>
           </div>
           {changelog && (<div className="max-h-60 overflow-auto rounded-md border border-border p-3"><pre className="whitespace-pre-wrap text-xs text-muted-foreground">{changelog}</pre></div>)}
@@ -382,7 +382,7 @@ export function Settings() {
         <CardHeader><CardTitle className="flex items-center gap-2"><Package className="h-4 w-4" /> Unity Hub</CardTitle></CardHeader>
         <CardContent className="flex items-center justify-between">
           <div>{hubInfo === null ? (<p className="text-sm text-muted-foreground">{t("common.loading")}</p>) : hubInfo.installed ? (<><p className="text-sm font-medium flex items-center gap-2"><Badge variant="success">✓ {t("settings.hubInstalled")}</Badge></p>{hubInfo.path && <p className="text-xs text-muted-foreground mt-1">{hubInfo.path}</p>}<p className="text-xs text-muted-foreground mt-1">{t("settings.uninstallHubDesc")}</p></>) : (<><p className="text-sm font-medium flex items-center gap-2"><Badge variant="secondary">{t("settings.hubNotInstalled")}</Badge></p><p className="text-xs text-muted-foreground mt-1">{t("settings.installHubDesc")}</p></>)}</div>
-          <div className="flex gap-2">{hubInfo?.installed ? (<Button variant="outline" size="sm" onClick={() => { if (confirm(t("settings.uninstallHubDesc"))) alert("Please uninstall Unity Hub manually from your system's application manager."); }}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.uninstallHub")}</Button>) : (<Button size="sm" onClick={() => tauri.installHub()}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.installHub")}</Button>)}</div>
+          <div className="flex gap-2">{hubInfo?.installed ? (<Button variant="outline" size="sm" onClick={() => { if (confirm(t("settings.uninstallHubDesc"))) alert("Please uninstall Unity Hub manually from your system's application manager."); }}><Trash2 className="mr-2 h-3.5 w-3.5" /> {t("settings.uninstallHub")}</Button>) : (                <Button size="sm" onClick={() => tauri.installHub().catch(e => showToast("error", e.message))}><Download className="mr-2 h-3.5 w-3.5" /> {t("settings.installHub")}</Button>)}</div>
         </CardContent>
       </Card>
 

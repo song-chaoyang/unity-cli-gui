@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { width:1200px; height:800px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#0e1829; color:#e0e6f0; overflow:hidden; }
+:root { --bg:#0e1829; --card:#142030; --sb:#0c1423; --border:#213044; --text:#e0e6f0; --muted:#8291a5; --primary:#0ea5e9; --green:#4ade80; --yellow:#fbbf24; --red:#f87171; --purple:#a855f7; --teal:#2dd4bf; --orange:#fb923c; }
+.app { display:flex; flex-direction:column; height:800px; }
+.topbar { height:48px; display:flex; align-items:center; gap:8px; padding:0 16px; border-bottom:1px solid var(--border); }
+.sidebar { width:224px; border-right:1px solid var(--border); background:var(--sb); padding:8px 0; flex-shrink:0; }
+.main { flex:1; display:flex; overflow:hidden; }
+.content { flex:1; padding:16px; overflow:auto; }
+.statusbar { height:28px; display:flex; align-items:center; gap:16px; padding:0 16px; border-top:1px solid var(--border); font-size:9px; color:var(--muted); }
+.nav-item { display:flex; align-items:center; gap:12px; padding:10px 16px; font-size:12px; color:var(--muted); border-left:2px solid transparent; }
+.nav-item.active { background:#142030; color:var(--text); border-left-color:var(--primary); }
+.card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:12px; }
+.card-title { font-size:14px; font-weight:600; margin-bottom:8px; }
+.badge { display:inline-flex; align-items:center; padding:2px 8px; border-radius:4px; font-size:9px; font-weight:500; }
+.badge-primary { background:rgba(14,165,233,.15); color:var(--primary); }
+.badge-green { background:rgba(74,222,128,.15); color:var(--green); }
+.badge-yellow { background:rgba(251,191,36,.15); color:var(--yellow); }
+.badge-red { background:rgba(248,113,113,.15); color:var(--red); }
+.badge-muted { background:rgba(130,145,165,.15); color:var(--muted); }
+.badge-teal { background:rgba(45,212,191,.15); color:var(--teal); }
+.badge-purple { background:rgba(168,85,247,.15); color:var(--purple); }
+.btn { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:6px; font-size:11px; border:1px solid var(--border); background:transparent; color:var(--text); }
+.btn-primary { background:var(--primary); border-color:var(--primary); color:#fff; }
+.stat-card { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; }
+.stat-value { font-size:22px; font-weight:700; }
+.stat-label { font-size:11px; color:var(--muted); }
+.stat-sub { font-size:9px; color:var(--muted); margin-top:2px; }
+.row { display:flex; align-items:center; gap:8px; padding:8px 12px; }
+.row:hover { background:rgba(33,48,68,.3); }
+.mono { font-family:'SF Mono',Menlo,monospace; font-size:10px; }
+.input-box { background:transparent; border:1px solid var(--border); border-radius:6px; padding:6px 10px; font-size:11px; color:var(--text); display:inline-flex; align-items:center; gap:6px; }
+.chat-msg { padding:8px 12px; border-radius:8px; font-size:12px; }
+.chat-user { background:var(--primary); color:#fff; max-width:60%; }
+.chat-bot { background:var(--card); }
+.cmd-block { background:#080e19; border-radius:6px; padding:8px 12px; font-family:'SF Mono',Menlo,monospace; font-size:10px; color:var(--teal); margin:6px 0; }
+</style></head>
+<body><div class="app">
+<div class="topbar"><span style="font-size:14px;">🎮</span><span style="font-size:14px;font-weight:600;">Unity CLI GUI</span><span style="font-size:9px;color:var(--muted);">v1.0.0</span><div style="margin-left:auto;display:flex;align-items:center;gap:16px;"><div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--green);"></div><span style="font-size:11px;color:var(--green);">CLI Connected</span></div><div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--green);"></div><span style="font-size:11px;color:var(--muted);">demo@example.com</span></div></div></div>
+<div class="main"><div class="sidebar"><div class="nav-item">📊 <span>Dashboard</span></div>
+<div class="nav-item">🎮 <span>Editors</span></div>
+<div class="nav-item">📁 <span>Projects</span></div>
+<div class="nav-item">🔨 <span>Build</span></div>
+<div class="nav-item">🧪 <span>Test</span></div>
+<div class="nav-item">🤖 <span>MCP / AI</span></div>
+<div class="nav-item">💬 <span>AI Chat</span></div>
+<div class="nav-item">⬇️ <span>Downloads</span></div>
+<div class="nav-item">🖥️ <span>Terminal</span></div>
+<div class="nav-item">📋 <span>Logs</span></div>
+<div class="nav-item active">⚙️ <span>Settings</span></div>
+<div class="nav-item">ℹ️ <span>About</span></div>
+</div><div class="content"><h1 style="font-size:18px;font-weight:600;margin-bottom:4px;">⚙️ Settings</h1>
+<p style="font-size:11px;color:var(--muted);margin-bottom:16px;">Configure Unity CLI GUI</p>
+<div class="card">
+  <div class="card-title">🎨 Theme</div>
+  <div style="display:flex;gap:8px;"><button class="btn btn-primary">🌙 Dark</button><button class="btn">☀️ Light</button><button class="btn">💻 System</button></div>
+</div>
+<div class="card">
+  <div class="card-title">🌐 Language</div>
+  <div class="input-box" style="width:240px;">🌐 English (auto-detected)</div>
+  <span style="font-size:9px;color:var(--muted);margin-left:12px;">10 languages available</span>
+</div>
+<div class="card">
+  <div class="card-title">🔑 License Management</div>
+  <div style="display:flex;gap:12px;align-items:center;font-size:11px;">
+    <span>Status:</span> <span class="badge badge-green">✓ Active</span>
+    <span style="margin-left:16px;">Type: Personal</span>
+    <span style="margin-left:16px;">Expiry: 2026-12-31</span>
+    <button class="btn" style="margin-left:auto;">🔑 Activate</button>
+    <button class="btn">↩️ Return</button>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">📦 CLI Management</div>
+  <div style="display:flex;gap:12px;align-items:center;font-size:11px;">
+    <span class="badge badge-green">v1.0.0-beta.5</span>
+    <span style="color:var(--muted);">Auto-update: Enabled</span>
+    <button class="btn" style="margin-left:auto;">🔄 Check Update</button>
+    <button class="btn">📋 Changelog</button>
+    <button class="btn btn-primary">⬆️ Upgrade</button>
+  </div>
+</div>
+<div class="card">
+  <div class="card-title">💾 Cache Management</div>
+  <div style="display:flex;gap:12px;align-items:center;font-size:11px;">
+    <span style="font-size:12px;">📦 2.4 GB (1,247 files)</span>
+    <span class="mono" style="color:var(--muted);">~/.unity/cache</span>
+    <button class="btn" style="margin-left:auto;">🗑️ Clean Cache</button>
+  </div>
+</div></div></div>
+<div class="statusbar"><span>CLI v1.0.0-beta.5</span><span style="display:flex;align-items:center;gap:4px;"><span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;"></span> demo@example.com</span><span>3 editors installed</span><span>5 projects</span><span style="margin-left:auto;color:var(--green);">● CLI Connected</span></div>
+</div></body></html>

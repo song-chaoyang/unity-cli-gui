@@ -25,7 +25,10 @@ export function About() {
       try {
         const env = await tauri.getEnv();
         setEnvInfo(env);
-        setCliVersion(env?.hubVersion || "—");
+      } catch {}
+      try {
+        const upgrade = await tauri.checkCliUpdate();
+        setCliVersion(upgrade.currentVersion || "—");
       } catch {}
     })();
   }, []);

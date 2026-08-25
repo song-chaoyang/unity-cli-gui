@@ -190,7 +190,10 @@ export function Editors() {
               const isExpanded = expandedPaths.has(ed.version);
               const grouped = isExpanded ? getGroupedModules(ed.version) : {};
               const mods = modulesMap[ed.version] || [];
-              const installedMods = mods.filter(m => m.status === "已安装" || m.status.toLowerCase().includes("install"));
+              const installedMods = mods.filter(m => {
+                const s = (m.status || "").toLowerCase();
+                return s.includes("install") || s.includes("已安装") || s.includes("已安裝");
+              });
               return (
                 <Card key={ed.version} className={cn("overflow-hidden transition-all", isExpanded && "border-primary/50")}>
                   {/* Main row */}
@@ -238,7 +241,10 @@ export function Editors() {
                               </div>
                               <div className="grid grid-cols-2 gap-1">
                                 {catMods.map(mod => {
-                                  const isInstalled = mod.status === "已安装" || mod.status.toLowerCase().includes("install");
+                                  const isInstalled = (() => {
+                                    const s = (mod.status || "").toLowerCase();
+                                    return s.includes("install") || s.includes("已安装") || s.includes("已安裝");
+                                  })();
                                   const isLoading = moduleActionLoading === mod.id;
                                   return (
                                     <div key={mod.id} className="flex items-center gap-2 rounded-md border border-border p-2 text-xs hover:bg-accent/30">

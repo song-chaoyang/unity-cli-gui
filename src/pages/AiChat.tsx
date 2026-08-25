@@ -308,8 +308,10 @@ export function AiChat() {
         assistantMsg.results = [];
         for (const cmd of commands) {
           try {
-            const args = cmd.split(/\s+/).slice(1);
-            const result = await tauri.runUnityCommand(args);
+            // Strip "unity" prefix and --json/--no-banner flags (runUnityCommand adds them in json mode)
+            let args = cmd.split(/\s+/).slice(1).filter(a => a !== "--json" && a !== "--no-banner");
+            const hasJsonFlags = cmd.includes("--json");
+            const result = await tauri.runUnityCommand(args, hasJsonFlags);
             const truncated = result.length > 2000 ? result.slice(0, 2000) + "..." : result;
             assistantMsg.results!.push(truncated);
           } catch (e: any) {
