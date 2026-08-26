@@ -96,6 +96,53 @@ function requireUnity() {
   return p;
 }
 
+// ─── Headless Secret Service bootstrap (Linux) ─────────────────────────────
+//
+// The Unity CLI persists auth credentials to the OS keyring (Secret Service
+// via libsecret/D-Bus). On headless Linux servers there is no gnome-keyring,
+// so even a successful browser OAuth can't save the token — `auth status`
+// stays loggedIn:false. We ship a minimal file-backed Secret Service
+// (web/file-secret-service.py); on Linux without a usable D-Bus session bus,
+// start one and point DBUS_SESSION_BUS_ADDRESS at it so every spawned CLI
+// process (auth login / auth status) can persist credentials.
+let secretServiceStarted = false;
+
+function ensureSecretService() {
+  if (process.platform !== "linux") return;
+  if (secretServiceStarted) return;
+  if (process.env.DBUS_SESSION_BUS_ADDRESS) return; // caller already provided a bus
+  let python = null;
+  try {
+    python = execSync("which python3", { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }).trim() || null;
+  } catch {}
+  const svc = path.join(__dirname, "file-secret-service.py");
+  if (!python || !fs.existsSync(svc)) return;
+
+  secretServiceStarted = true;
+  // Start a private session bus and capture its address.
+  const dbus = spawn("dbus-daemon", ["--session", "--fork", "--print-address=1"], {
+    stdio: ["ignore", "pipe", "ignore"],
+  });
+  let busBuf = "";
+  dbus.stdout?.on("data", (chunk) => {
+    busBuf += chunk.toString();
+    const m = busBuf.match(/unix:path=[^\s,;]+/);
+    if (m && !process.env.DBUS_SESSION_BUS_ADDRESS) {
+      process.env.DBUS_SESSION_BUS_ADDRESS = m[0];
+      // Start the file-backed Secret Service on that bus (daemonized so it
+      // survives the node process).
+      const child = spawn(python, [svc], {
+        env: { ...process.env, DBUS_SESSION_BUS_ADDRESS: m[0] },
+        stdio: "ignore",
+        detached: true,
+      });
+      child.unref();
+      console.log(`[secret-service] started on ${m[0]}`);
+    }
+  });
+  dbus.on("error", (e) => console.warn("[secret-service] dbus-daemon error:", e.message));
+}
+
 /** Find the Unity Editor binary (for manual license activation). */
 function findUnityEditorBinary() {
   const home = process.env.HOME || process.env.USERPROFILE || "";
@@ -1371,6 +1418,10 @@ server.listen(PORT, "0.0.0.0", () => {
   console.log(`  ${"│"}  Mode:    ${pad(DEV ? "DEV (proxy to Vite:1422)" : "PRODUCTION (serving dist/)", w - 10)}${"│"}`);
   console.log(`  ${"└" + "─".repeat(w) + "┘"}`);
   console.log("");
+
+  // Headless Linux: ensure a Secret Service is available so CLI auth
+  // credentials can be persisted after browser OAuth completes.
+  ensureSecretService();
 
   if (!unityPath) {
     console.log("  ⚠  Unity CLI binary not found! Install it or set UNITY_PATH env var.\n");

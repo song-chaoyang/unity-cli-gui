@@ -240,9 +240,18 @@ if [ ! -d "$INSTALL_DIR" ]; then
 fi
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  cd "$INSTALL_DIR"
-  git pull --ff-only 2>/dev/null || true
-  echo -e "  ${GREEN}✓${NC} Updated at $INSTALL_DIR"
+  cd "$INSTALL_DIR" || { echo -e "${RED}Cannot cd to $INSTALL_DIR${NC}"; exit 1; }
+  # Update to the exact remote main. Deployment dirs must mirror the remote,
+  # so discard any local edits to tracked files (untracked files are kept).
+  if ! git fetch origin --quiet 2>/dev/null; then
+    echo -e "${RED}✗ git fetch failed — cannot update. Check network / credentials.${NC}"
+    exit 1
+  fi
+  if ! git reset --hard --quiet origin/main 2>/dev/null; then
+    echo -e "${RED}✗ git reset failed — cannot update.${NC}"
+    exit 1
+  fi
+  echo -e "  ${GREEN}✓${NC} Updated at $INSTALL_DIR ($(git rev-parse --short HEAD))"
 else
   git clone --depth 1 "$REPO_URL" "$INSTALL_DIR" 2>/dev/null || {
     echo -e "${RED}Failed to clone repository. Check your network connection.${NC}"
